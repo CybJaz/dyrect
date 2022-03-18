@@ -28,6 +28,7 @@ def lorentz_eq(_, args):
             args[0] * args[1] - l_beta * args[2]]
 
 
+# TODO: add noise to t step
 def lemniscate_eq(t, params=[1.]):
     c = np.sqrt(2) * np.cos(t)
     s2 = np.sin(t) ** 2
@@ -38,9 +39,14 @@ def lemniscate_eq(t, params=[1.]):
 # 2D TIME SERIES
 # ##############
 
-def lemniscate(npoints, step=0.02, scale=1., noise=0.02):
-    return lemniscate_eq(np.arange(0., npoints * step * np.pi, step * np.pi), [scale]) + \
-           np.random.normal(0, noise, (npoints, 2))
+def lemniscate(npoints, step=0.2, scale=1., tnoise=0.02, noise=0.05):
+    times = np.empty((npoints,))
+    times[0] = 0.
+    for i in range(npoints-1):
+        times[i+1] = times[i] + step + np.random.normal(0, tnoise)
+    return lemniscate_eq(times, [scale]) + np.random.normal(0, noise, (npoints, 2))
+    # return lemniscate_eq(np.arange(0., npoints * step * np.pi, step * np.pi), [scale]) + \
+    #        np.random.normal(0, noise, (npoints, 2))
     # np.random.random_sample((npoints, 2))*noise
 
 

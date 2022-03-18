@@ -1,61 +1,45 @@
 import numpy as np
-import dyrect.epsilon_net as en
-import dyrect.reconstruction as tg
-from dyrect.data_generators import lemniscate
-from dyrect.drawing import *
-
+# import dyrect.epsilon_net as en
+# import dyrect.reconstruction as tg
+# from dyrect.data_generators import lemniscate
+# from dyrect.drawing import *
+import dyrect as dy
 import matplotlib.pyplot as plt
-import matplotlib as mpl
-import networkx as nx
+
+bplot = True
 
 np.random.seed(0)
-points = lemniscate(np.linspace(0, 200 * np.pi, num=2000)) + \
-         np.random.random_sample((2000, 2)) * 0.2
+points = dy.lemniscate(10000, step=0.2, tnoise=0.02, noise=0.05)
 
-eps = 0.2
-EN = en.EpsilonNet(eps, 0)
+eps = 0.15
+EN = dy.EpsilonNet(eps, 0)
 EN.fit(points)
 lms = EN._landmarks
 print(lms.shape)
 
-plt.figure()
-plt.scatter(points[:, 0], points[:, 1], s=0.5)
-plt.scatter(lms[:, 0], lms[:, 1], s=21.9)
+if bplot:
+    plt.figure()
+    plt.scatter(points[:, 0], points[:, 1], s=0.5)
+    plt.scatter(lms[:, 0], lms[:, 1], s=21.9)
 
-TM = tg.TransitionMatrix(lms, eps)
+TM = dy.TransitionMatrix(lms, eps)
 transitions = TM.fit(points)
-prob_matrix = tg.trans2prob(transitions)
+prob_matrix = dy.trans2prob(transitions)
 
-draw_transition_graph(prob_matrix, lms, threshold=0.15)
-plt.show()
+nc = dy.NerveComplex(lms, eps, 2, points)
+print(nc.betti_numbers)
 
-# DG = nx.DiGraph()
-#
-# threshold = 0.2
-# nnodes = len(transitions)
-#
-# for i in range(nnodes):
-#     edges = [(i, j, prob_matrix[i, j]) for j in range(nnodes) if prob_matrix[i, j] > threshold]
-#     #     print(edges)
-#     DG.add_weighted_edges_from(edges)
-# # for i in range(nnodes):
-# #     if prob_matrix[i,i] > threshold:
-# #         print([i,prob_matrix[i,i]])
-#
-# edge_colors = [e[2] for e in DG.edges.data("weight")]
-# cmap = plt.cm.plasma
-#
-# plt.figure(figsize=(10, 6))
-# nx.draw_networkx_nodes(DG, pos=lms, node_size=50)
-# edges = nx.draw_networkx_edges(DG, pos=lms, node_size=50, edge_color=edge_colors, edge_cmap=cmap, width=2,
-#                                arrowsize=10);
-#
-# pc = mpl.collections.PatchCollection(edges, cmap=cmap)
-# pc.set_array(edge_colors)
-# plt.colorbar(pc)
-# ax = plt.gca()
-# ax.set_axis_off()
-# plt.show()
+if bplot:
+    dy.draw_transition_graph(prob_matrix, lms, threshold=0.15)
+    plt.show()
+    dy.draw_complex(nc)
+    plt.show()
+
+    snc, _ = nc.subcomplex(list(range(10,40)))
+    dy.draw_complex(snc)
+    plt.show()
+
+
 
 # def unit_circle_sample(npoints, noise=0.0):
 #     rpoints = 2 * np.pi * np.random.random_sample((npoints))

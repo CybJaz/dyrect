@@ -1,4 +1,5 @@
-from collections import Counter
+# from collections import Counter
+from dataclasses import dataclass
 import matplotlib.pyplot as plt
 import numpy as np
 import re
@@ -31,6 +32,7 @@ class TransitionMatrix:
         dist_to_landmarks = distance_matrix(X, self._landmarks, p=self._p)
         trans_mat = np.full((self._nlands, self._nlands), 0.)
 
+        # TODO: check if this way of counting transitions is reasonable
         prev = np.where(dist_to_landmarks[0] < self._eps)[0]
         for i in range(1, len(X)):
             curr = np.where(dist_to_landmarks[i] < self._eps)[0]
@@ -41,12 +43,13 @@ class TransitionMatrix:
         return trans_mat
 
 
-def symbolization(X, lms, eps=0):
+def symbolization(X, lms, eps=0, simplified=False):
     """ symbolization of a time series, a sequence of points is transformed into a list of integers (elements of
             the lms cover)
         X - a time series of a shape [n, dim]
         lms - landmarks - an array of shape [l, dim]
         eps - epsilon (from epsilon net)
+        TODO: simplified - reduce repeating consecutive symbols
     """
     distances = cdist(X, lms, 'euclidean')  # distances to landmarks
     symbols = np.array([np.argmin(point_to_lms) for point_to_lms in distances])
@@ -71,12 +74,36 @@ def symb2string(symbols, codesize=-1):
     return '-'.join(nums)
 
 
+@dataclass
+class Future:
+    sequence: tuple
+    counter: int
+    occurences: list
+
+@dataclass
+class Prediction:
+    past: tuple
+    futures: list
+
+
+# history - a training time series
+# history book - a symbolized training time series
+# past/query - a new short time series
+# story - a symbolized query
+# future - a
+
 class Seer:
     """
     A class for making predictions from a time series based on an epsilon-net
     """
 
-    def __init__(self, history, cover, eps=-1):
+    def __init__(self, history, cover, eps=-1, simplified=False):
+        """
+        :param history:
+        :param cover:
+        :param eps:
+        :param TODO: simplified - reduce repeating consecutive symbols
+        """
         # cover variable could be more abstract, for now it's just a collection of landmarks
         self._history = history
         self._cover = cover
@@ -84,44 +111,173 @@ class Seer:
         codes = symbolization(history, cover, eps)
         self._codesize = len(str(max(codes)))
         self._history_book = symb2string(codes)
+        self._dimension = len(history[0])
+        assert len(cover[0]) == self._dimension
 
-    def predict(self, past, f, draw=False):
+        # it's state-machine like variables
+        self._recent_reg = None
+        self._recent_query = None
+        self._recent_story = None
+        self._recent_futures = None
+
+        self._recent_prediction = None
+
+        # TODO:
+        # class Query:
+
+    def predict(self, past, f, p=-1):
+        dim = len(past[0])
+        assert len(past[0])==self._dimension
+
         # (p,f) - p-past steps, f-future steps predictions
-        p = len(past)
-        story = symbolization(past, self._cover, self._eps)
-        if min(story) < 0:
+        # TODO: p is not used
+        if p == -1:
+            p = len(past)
+        else:
+            p = min(len(past), p)
+
+        self._recent_query = past[-p:]
+        self._recent_story = symbolization(self._recent_query, self._cover, self._eps)
+        if min(self._recent_story) < 0:
+            # the negative symbol means an unknown symbol
             print("this past has never happened before")
-            return []
-        reg = symb2string(story, codesize=self._codesize) + '.{' + str(f * 4) + '}'
-        print(reg)
-        futures = [(event.group(0), event.span(0)) for event in re.finditer(reg, self._history_book)]
-        #         re.findall(reg, self.history_book_)
-        unique_futures = Counter([future[0][-f * 4:] for future in futures])
-        #         unique_futures = Counter([future[0] for future in futures])
+            return None
+        self._recent_reg = symb2string(self._recent_story, codesize=self._codesize) + '.{' + str(f * (self._codesize+1)) + '}'
+        # print(reg)
+        futures = [(event.group(0), event.span(0)) for event in re.finditer(self._recent_reg, self._history_book)]
+        # print(futures[0])
+        futures = [(tuple([int(k) for k in f[1:].split('-')]), idxs) for (f, idxs) in futures]
+        # self._recent_unique_futures = Counter([future[0][-f * (self._codesize+1):] for future in futures])
+        futures_dict = dict()
+        for f, idxs in futures:
+            (b,e) = (int(idxs[0] / (self._codesize+1.)), int((idxs[1] + 1) / (self._codesize+1.)))
+            if f in futures_dict:
+                futures_dict[f].counter += 1
+                futures_dict[f].occurences.append((b,e))
+            else:
+                futures_dict[f] = Future(f, 1, [(b,e)])
 
-        #         print([(event.group(0), event.span(0)) for event in re.finditer(reg, self.history_book_)])
+        self._recent_futures = [f for f in futures_dict.values()]
+        self._recent_futures.sort(key=(lambda f: f.counter), reverse=True)
 
-        if draw:
+        self._recent_prediction = Prediction(self._recent_story, self._recent_futures)
+        return self._recent_prediction
+
+    def draw_hom_grouped_prediction(self, complex, steps=[], prediction=None):
+        """
+        :param prediction: a list of Future objects, if None draw the recent one
+        :return:
+        """
+        if prediction is None:
+            if self._recent_prediction is None:
+                print("no prediction to draw")
+                return None
+            else:
+                prediction = self._recent_prediction
+
+        def the_same(path1, path2):
+            if len(path1) == len(path2) and all([path1[i] == path2[i] for i in range(len(path1))]):
+                return True
+            return False
+
+        paths = np.array([list(f.sequence) for f in prediction.futures])
+
+        t0 = len(prediction.past)
+        t1 = len(paths[0])
+        period = t1-t0
+
+        t_subcomplexes = []
+        t_components = []
+        for t in range(t0, t1):
+            tsnc, components = complex.subcomplex(paths[:, t])
+            t_subcomplexes.append(tsnc)
+            t_components.append(
+                [set([i for i in range(len(paths)) if paths[i, t] in component]) for component in components])
+
+        t_clusters = {0: t_components[0]}
+        for t in range(1, period):
+            t_clusters[t] = []
+            for c1 in t_clusters[t - 1]:
+                for c2 in t_components[t]:
+                    c3 = c1.intersection(c2)
+                    if len(c3) > 0:
+                        t_clusters[t].append(c3)
+
+        lc = 0
+        for c in t_clusters:
+            nlc = len(t_clusters[c])
+            if nlc != lc:
+                print("T: ", c, " components: ", nlc)
+                lc = nlc
+
+        for step in steps:
+            print("T: ", step)
+            clusters_at_step = t_clusters[step]
+
+            past_paths_in_clusters = []
+            for idx, cluster in enumerate(clusters_at_step):
+                paths_in_cluster = []
+                for el in cluster:
+                    for (b, e) in prediction.futures[el].occurences:
+                        paths_in_cluster.append(self._history[b:(b + t0 + step)])
+                past_paths_in_clusters.append(paths_in_cluster)
+            past_paths_in_clusters
+
             fig = plt.figure(figsize=(12, 10), dpi=80)
-
             ax = fig.add_subplot(projection='3d')
 
-            past_path = np.array([self._cover[int(k)] for k in story])
-            # print(past_path)
+            colors = plt.cm.rainbow(np.linspace(0, 1, len(past_paths_in_clusters)))
+            for idx, cluster_paths in enumerate(past_paths_in_clusters):
+                for path in cluster_paths:
+                    ax.plot(path[:, 0], path[:, 1], path[:, 2], linewidth=0.5, color=colors[idx])
+        plt.show()
 
-            ax.scatter(past_path[:, 0], past_path[:, 1], past_path[:, 2], c='black', s=30)
-            ax.plot(past_path[:, 0], past_path[:, 1], past_path[:, 2], c='black', linewidth=4)
+    def draw_prediction(self, prediction=None):
+        """
+        :param prediction: a list of Future objects, if None draw the recent one
+        :return:
+        """
+        if prediction is None:
+            if self._recent_prediction is None:
+                print("no prediction to draw")
+                return None
+            else:
+                prediction = self._recent_prediction
 
-            for idx, key in enumerate(list(unique_futures.keys())):
-                path = np.array([self._cover[int(k)] for k in key[1:].split('-')])
+        # TODO: how to pass fig arguments as an argument
+        fig = plt.figure(figsize=(12, 10), dpi=80)
+
+        if self._dimension == 3:
+            ax = fig.add_subplot(projection='3d')
+
+            # a combinatorial trajectory
+            combinatorial_past = np.array([self._cover[k] for k in prediction.past])
+
+            ax.scatter(combinatorial_past[:, 0], combinatorial_past[:, 1], combinatorial_past[:, 2], c='black', s=30)
+            ax.plot(combinatorial_past[:, 0], combinatorial_past[:, 1], combinatorial_past[:, 2], c='black', linewidth=4)
+
+            for cpath in prediction.futures:
+                path = np.array([self._cover[k] for k in cpath.sequence[(len(prediction.past)):]])
                 ax.scatter(path[:, 0], path[:, 1], path[:, 2])
                 ax.plot(path[:, 0], path[:, 1], path[:, 2], linewidth=2)
 
-            for (_, (b, e)) in futures:
-                #                 print(b,e)
-                #                 print(b/4,(e+1)/4)
-                (b, e) = (int(b / 4), int((e + 1) / 4))
-                #                 print(self.history_book_[b:e])
-                ax.plot(self._history[b:e, 0], self._history[b:e, 1], self._history[b:e, 2], linewidth=0.2)
-        #             plt.show()
-        return unique_futures
+            for future in prediction.futures:
+                for (b, e) in future.occurences:
+                    ax.plot(self._history[b:e, 0], self._history[b:e, 1], self._history[b:e, 2], linewidth=0.2)
+
+        elif self._dimension == 2:
+            ax = fig.add_subplot()
+            combinatorial_past = np.array([self._cover[k] for k in prediction.past])
+
+            ax.scatter(combinatorial_past[:, 0], combinatorial_past[:, 1], c='black', s=30)
+            ax.plot(combinatorial_past[:, 0], combinatorial_past[:, 1], c='black',
+                    linewidth=4)
+
+            for cpath in prediction.futures:
+                path = np.array([self._cover[k] for k in cpath.sequence[(len(prediction.past)):]])
+                ax.scatter(path[:, 0], path[:, 1])
+                ax.plot(path[:, 0], path[:, 1], linewidth=2)
+
+            for future in prediction.futures:
+                for (b, e) in future.occurences:
+                    ax.plot(self._history[b:e, 0], self._history[b:e, 1], linewidth=0.2)
