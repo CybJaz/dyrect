@@ -20,27 +20,54 @@ def embedding(points, dimension, delay):
 
 
 class TransitionMatrix:
-    def __init__(self, landmarks, epsilon, p=2):
+    def __init__(self, landmarks, epsilon, p=2, alpha=True, prob=True):
+        """
+        :param landmarks:
+        :param epsilon:
+        :param p:
+        :param alpha: boolean, do cells should be counted as alpha shapes?
+        :param prob: is the resulting matrix a probability matrix (True) or a binary matrix (False)
+        """
         self._landmarks = landmarks
         self._nlands = len(landmarks)
         # p defines norm type
         self._p = p
         self._eps = epsilon
+        self._alpha = alpha
+        self._prob = prob
 
     def fit(self, X, Y=None):
+        return self
+
+    def transform(self, X, Y=None):
         # compute distances
         dist_to_landmarks = distance_matrix(X, self._landmarks, p=self._p)
         trans_mat = np.full((self._nlands, self._nlands), 0.)
 
-        # TODO: check if this way of counting transitions is reasonable
-        prev = np.where(dist_to_landmarks[0] < self._eps)[0]
-        for i in range(1, len(X)):
-            curr = np.where(dist_to_landmarks[i] < self._eps)[0]
-            fr, to = np.meshgrid(prev, curr)
-            trans_mat[fr, to] += 1
-            prev = curr
+        if self._alpha:
+            prev_min = np.min(dist_to_landmarks[0])
+            assert prev_min <= self._eps
+            prev = np.where(dist_to_landmarks[0] == prev_min)[0]
+            for i in range(1, len(X)):
+                curr_min = np.min(dist_to_landmarks[i])
+                assert curr_min <= self._eps
+                curr = np.where(dist_to_landmarks[i] == curr_min)[0]
+                fr, to = np.meshgrid(prev, curr)
+                trans_mat[fr, to] += 1
+                prev = curr
+        else:
+            # TODO: check if this way of counting transitions is reasonable
+            prev = np.where(dist_to_landmarks[0] < self._eps)[0]
+            for i in range(1, len(X)):
+                curr = np.where(dist_to_landmarks[i] < self._eps)[0]
+                fr, to = np.meshgrid(prev, curr)
+                trans_mat[fr, to] += 1
+                prev = curr
 
-        return trans_mat
+        if self._prob:
+            return trans_mat
+        else:
+            return np.where(trans_mat>0, 1, 0)
 
 
 def symbolization(X, lms, eps=0, simplified=False):
@@ -221,16 +248,28 @@ class Seer:
                     for (b, e) in prediction.futures[el].occurences:
                         paths_in_cluster.append(self._history[b:(b + t0 + step)])
                 past_paths_in_clusters.append(paths_in_cluster)
-            past_paths_in_clusters
+            # past_paths_in_clusters
 
             fig = plt.figure(figsize=(12, 10), dpi=80)
-            ax = fig.add_subplot(projection='3d')
 
             colors = plt.cm.rainbow(np.linspace(0, 1, len(past_paths_in_clusters)))
-            for idx, cluster_paths in enumerate(past_paths_in_clusters):
-                for path in cluster_paths:
-                    ax.plot(path[:, 0], path[:, 1], path[:, 2], linewidth=0.5, color=colors[idx])
+
+            d = len(past_paths_in_clusters[0][0][0])
+            # print(d, past_paths_in_clusters[0])
+
+            if d == 3:
+                ax = fig.add_subplot(projection='3d')
+                for idx, cluster_paths in enumerate(past_paths_in_clusters):
+                    for path in cluster_paths:
+                        ax.plot(path[:, 0], path[:, 1], path[:, 2], linewidth=0.5, color=colors[idx])
+            elif d == 2:
+                ax = fig.add_subplot()
+                for idx, cluster_paths in enumerate(past_paths_in_clusters):
+                    for path in cluster_paths:
+                        ax.plot(path[:, 0], path[:, 1], linewidth=0.5, color=colors[idx])
+
         plt.show()
+        return fig, ax
 
     def draw_prediction(self, prediction=None):
         """
@@ -258,6 +297,8 @@ class Seer:
 
             for cpath in prediction.futures:
                 path = np.array([self._cover[k] for k in cpath.sequence[(len(prediction.past)):]])
+                ax.plot([combinatorial_past[-1, 0], path[0, 0]], [combinatorial_past[-1, 1], path[0, 1]], \
+                        [combinatorial_past[-1, 2], path[0, 2]], linewidth=1.5)
                 ax.scatter(path[:, 0], path[:, 1], path[:, 2])
                 ax.plot(path[:, 0], path[:, 1], path[:, 2], linewidth=2)
 
@@ -275,9 +316,13 @@ class Seer:
 
             for cpath in prediction.futures:
                 path = np.array([self._cover[k] for k in cpath.sequence[(len(prediction.past)):]])
-                ax.scatter(path[:, 0], path[:, 1])
-                ax.plot(path[:, 0], path[:, 1], linewidth=2)
+                if len(path) > 0:
+                    ax.plot([combinatorial_past[-1, 0], path[0, 0]], [combinatorial_past[-1, 1], path[0, 1]],
+                            linewidth=1.5)
+                    ax.scatter(path[:, 0], path[:, 1])
+                    ax.plot(path[:, 0], path[:, 1], linewidth=2)
 
             for future in prediction.futures:
                 for (b, e) in future.occurences:
                     ax.plot(self._history[b:e, 0], self._history[b:e, 1], linewidth=0.2)
+        return fig, ax

@@ -4,6 +4,9 @@ import numpy as np
 from scipy.cluster.hierarchy import DisjointSet
 from scipy.spatial.distance import cdist
 
+from .poset import Poset
+from itertools import chain, combinations
+
 class EpsilonNet:
     def __init__(self, eps, max_num_of_landmarks=0, dist=True, method='weighted_furthest'):
         """
@@ -54,8 +57,80 @@ class EpsilonNet:
     def complex(self):
         return self._complex
 
+class Complex():
+    def __init__(self, max_dim=-1):
+        self._simplices = dict()
+        self._coordinates = None
+        self._dim = max_dim
 
-class NerveComplex:
+    @classmethod
+    def construct(cls, simpls, coords=None, max_dim = -1):
+        obj = cls.__new__(cls)
+        obj._simplices = simpls
+        obj._coordinates = coords
+        dimension = [k for k in simpls.keys() if len(simpls[k]) == 0]
+        if len(dimension) == 0:
+            dimension = max(simpls.keys())
+        else:
+            dimension = min(dimension) - 1
+        if max_dim < 0:
+            obj._dim = dimension
+        else:
+            obj._dim = min(max_dim, dimension)
+        return obj
+
+    @property
+    def coordinates(self):
+        return self._coordinates
+
+    @property
+    def simplices(self):
+        return self._simplices
+
+    @property
+    def dimension(self):
+        return self._dim
+
+    def to_poset(self, idx=False):
+        """
+        Get the face-poset representation of a complex
+        :param idx: return the map between simplices and indices of points in the poset
+        :return: Poset representing a complex
+        """
+        nsimplices = sum([len(x) for x in self.simplices.values()])
+        poset = Poset(nsimplices)
+        sim2idx = dict()
+        for i, s in zip(range(nsimplices), chain(*self.simplices.values())):
+            sim2idx[s] = i
+            if len(s) > 1:
+                for face in combinations(s, len(s) - 1):
+                    poset.add_relation(sim2idx[face], i)
+        if idx:
+            return poset, sim2idx
+        else:
+            return poset
+
+    def baricentric_subdivision(self):
+        poset, sim2idx = self.to_poset(idx=True)
+
+        nsimplices = sum([len(x) for x in self.simplices.values()])
+        baricenters = []
+        # poset = Poset(nsimplices)
+        # sim2idx = dict()
+        simplex2baricenter = dict()
+        for i, s in zip(range(nsimplices), chain(*self.simplices.values())):
+            # sim2idx[s] = i
+            bc = np.average(self.coordinates[list(s), :], axis=0)
+            baricenters.append(bc)
+            # for d in range(1,len(s)):
+            # if len(s) > 1:
+            #     for face in combinations(s, len(s) - 1):
+            #         poset.add_relation(sim2idx[face], i)
+        baricentric_simplices = poset.order_complex()
+        # print(baricentric_simplices)
+        return Complex.construct(baricentric_simplices, np.array(baricenters))
+
+class NerveComplex(Complex):
     def __init__(self, lms, eps, max_dim, points=[]):
         """
         :param lms:
@@ -143,18 +218,95 @@ class NerveComplex:
     def betti_numbers(self):
         return self._st.betti_numbers()
 
-    @property
-    def coordinates(self):
-        return self._coordinates
-
-    @property
-    def simplices(self):
-        return self._simplices
-
-    @property
-    def dimension(self):
-        return self._dim
+    # @property
+    # def coordinates(self):
+    #     return self._coordinates
+    #
+    # @property
+    # def simplices(self):
+    #     return self._simplices
+    #
+    # @property
+    # def dimension(self):
+    #     return self._dim
 
     @property
     def epsilon(self):
         return self._eps
+
+
+class AlphaNerveComplex(NerveComplex):
+    def __init__(self, lms, eps, max_dim=-1, points=[]):
+        """
+        :param lms:
+        :param eps:
+        :param max_dim:
+        :param points:
+        """
+        # NerveComplex.__init__(self, lms, eps, max_dim, points=points)
+
+        self._st = SimplexTree()
+        self._simplices = dict()
+        self._coordinates = lms
+        self._eps = eps
+
+        num_of_points = len(points)
+        assert num_of_points > 0, \
+            "alpha nerve_complex requires data points for construction"
+
+        # print(len(points[0]))
+        self._dim = len(points[0]) if max_dim==-1 else min(max_dim, len(points[0]))
+
+        # distances from points to landmarks
+        distances = cdist(points, lms, 'euclidean')
+
+
+        # for each point get a sorted (increasing) list of landmarks no further than epsilon
+        eps_lms = []
+        for x_arg_sorted, x in zip(np.argsort(distances, axis=1), range(num_of_points)):
+            i = 0
+            while distances[x, x_arg_sorted[i]] < eps:
+                i += 1
+            eps_lms.append(x_arg_sorted[:i])
+
+        for d in range(self.dimension + 1):
+            self._simplices[d] = []
+
+        # 0-dimension
+        for x_eps_lms in eps_lms:
+            assert len(x_eps_lms) >= 1
+            new_simplex = tuple(x_eps_lms[:1],)
+            if new_simplex not in self._simplices[0]:
+                self._simplices[0].append(new_simplex)
+
+        # 1 to d-dimension
+        for d in range(1,self.dimension + 1):
+            for x_eps_lms in eps_lms:
+                if len(x_eps_lms) >= d+1:
+                    new_simplex = tuple(np.sort(x_eps_lms[:d+1]))
+                    # check if all boundary elements are already present
+                    bdQ = True
+                    for b in range(d+1):
+                        boundary_simplex = new_simplex[:b] + new_simplex[b+1:]
+                        if boundary_simplex not in self._simplices[d-1]:
+                            bdQ = False
+                            break
+                    if bdQ and (new_simplex not in self._simplices[d]):
+                        self._simplices[d].append(new_simplex)
+
+        # d+1 dimension
+        extra_simplices = []
+        for x_eps_lms in eps_lms:
+            if len(x_eps_lms) >= self.dimension + 2:
+                new_simplex = tuple(np.sort(x_eps_lms[:self.dimension + 2]))
+                # check if all boundary elements are already present
+                bdQ = True
+                for b in range(d + 1):
+                    boundary_simplex = new_simplex[:b] + new_simplex[b + 1:]
+                    if boundary_simplex not in self._simplices[d - 1]:
+                        bdQ = False
+                        break
+                if bdQ and (new_simplex not in self._simplices[d]):
+                    self._simplices[d].append(new_simplex)
+
+        # self._st.persistence()

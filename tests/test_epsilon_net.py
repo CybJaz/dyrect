@@ -23,7 +23,7 @@ if bplot:
     plt.scatter(lms[:, 0], lms[:, 1], s=21.9)
 
 TM = dy.TransitionMatrix(lms, eps)
-transitions = TM.fit(points)
+transitions = TM.transform(points)
 prob_matrix = dy.trans2prob(transitions)
 
 nc = dy.NerveComplex(lms, eps, 2, points)
