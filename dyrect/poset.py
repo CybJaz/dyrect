@@ -76,6 +76,12 @@ class Poset:
     def above(self, x):
         return set(self._up.getrow(x).nonzero()[1])
 
+    def mouth(self, points):
+        m = set()
+        for p in points:
+            m = m.union(self.below(p))
+        return m.difference(set(points))
+
     def succesors(self, x):
         succ = set(self._down.getrow(x).nonzero()[1]).difference([x])
         not_used = list(succ.copy())

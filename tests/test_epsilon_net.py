@@ -9,9 +9,9 @@ import matplotlib.pyplot as plt
 bplot = True
 
 np.random.seed(0)
-points = dy.lemniscate(10000, step=0.2, tnoise=0.02, noise=0.05)
-
+# points = dy.lemniscate(10000, step=0.2, tnoise=0.02, noise=0.05)
 eps = 0.15
+
 EN = dy.EpsilonNet(eps, 0)
 EN.fit(points)
 lms = EN._landmarks

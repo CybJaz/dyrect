@@ -1,6 +1,7 @@
 import numpy as np
+from math import pi
 from scipy.integrate import RK45
-
+import sympy
 
 def generate_points(system, dimension, starting_point, n_points, int_step=0.02):
     integrator = RK45(system, 0, starting_point, 10000, first_step=int_step, max_step=5 * int_step)
@@ -36,6 +37,51 @@ def lemniscate_eq(t, params=[1.]):
     return np.transpose(np.vstack(([x], [x * np.sin(t)])))
 
 
+# 1D TIME SERIES
+# ##############
+
+def logistic_map(npoints, r = 4, starting_point = 1/3.):
+    def l(x):
+        return r * x * (1 - x)
+    # points = np.empty((npoints,))
+    # points[0] = starting_point
+    # for i in range(1, npoints):
+    #     points[i] = l(points[i-1])
+    points = [starting_point]
+    for i in range(1, npoints):
+        points.append(l(points[-1]))
+        # print(points[-1])
+    # print(points)
+    return np.array([p for p in points])
+
+def tent_map(npoints, starting_point = 1/2):
+    """
+    :param npoints:
+    :param starting_point: because of the numeric unstability of tent map use sympy starting points
+    :return:
+    """
+    def t(x):
+        # print(sympy.N(x,40), x.evalf(), x.evalf() <= 1/2, -x.evalf() <= 0)
+
+        if x.evalf() <= 1/2:
+            r = 2 * x
+        else:
+            r = 2 * (1-x)
+        # if r.evalf() < 0:
+        #     return -r
+        # else:
+        return r
+    # print(starting_point)
+    points = [starting_point]
+    # points = np.empty((npoints,))
+    # points[0] = starting_point
+    for i in range(1, npoints):
+        points.append(t(points[-1]))
+        # points[i] = t(points[i-1])
+        # print(points[-1])
+    return np.array([p.evalf() for p in points])
+
+
 # 2D TIME SERIES
 # ##############
 
@@ -49,6 +95,20 @@ def lemniscate(npoints, step=0.2, scale=1., tnoise=0.02, noise=0.05):
     #        np.random.normal(0, noise, (npoints, 2))
     # np.random.random_sample((npoints, 2))*noise
 
+def circle_rotation(npoints, step=pi/10, scale=1., starting_point=np.array([1,0])):
+    """
+    :param npoints: number of generated points
+    :param step: rotation in radians
+    :param scale: radius of the circle
+    :param starting_point:
+    :return:
+    """
+    points = np.empty((npoints, 2))
+    for i in range(npoints):
+        c = np.cos(i*step)
+        s = np.sin(i*step)
+        points[i] = np.dot(np.array([[c, -s], [s, c]]), starting_point)
+    return points * scale
 
 # 3D TIME SERIES
 # ##############
@@ -72,6 +132,16 @@ def lorenz_attractor(npoints, step=0.02, adaptive_step=False, starting_point=[1.
             integrator = RK45(lorentz_eq, 0, points[i], 10000,
                               first_step=step, max_step=(4 * step if adaptive_step else step))
     return points
+
+def torus_rotation(npoints, ang_step=0.02, rotation=0.1, radius=.25):
+    angles_phi = np.arange(0., npoints * pi * (ang_step), pi * ang_step)
+    angles_theta = angles_phi * rotation
+
+    torus_points = np.array([[
+            (1 + radius * np.cos(p)) * np.cos(t),
+            (1 + radius * np.cos(p)) * np.sin(t),
+            radius * np.sin(p)] for p, t in zip(angles_phi, angles_theta)])
+    return torus_points
 
 
 # 2D POINT CLOUDS

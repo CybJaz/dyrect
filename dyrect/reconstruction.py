@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 import matplotlib.pyplot as plt
 import numpy as np
+import networkx as nx
 import re
 from scipy.spatial import distance_matrix
 from scipy.spatial.distance import cdist
@@ -69,6 +70,81 @@ class TransitionMatrix:
         else:
             return np.where(trans_mat>0, 1, 0)
 
+
+class GeomTransitionMatrix:
+    def __init__(self, landmarks, complex, epsilon, p=2, alpha=True):
+        """
+        :param landmarks:
+        :param epsilon:
+        :param p:
+        :param alpha: boolean, do cells should be counted as alpha shapes, aka mitosis?
+        """
+        self._landmarks = landmarks
+        self._nlands = len(landmarks)
+        # p defines norm type
+        self._p = p
+        self._eps = epsilon
+        self._complex = complex
+        self._alpha = alpha
+
+    def fit(self, X, Y=None):
+        # TODO: what if alpha is false
+        # compute distances
+        dist_to_landmarks = distance_matrix(X, self._landmarks, p=self._p)
+        closest_landmark = np.argmin(dist_to_landmarks, axis=1)
+        trans_mat = np.full((self._nlands, self._nlands), 0.)
+
+        prev = closest_landmark[0]
+        assert dist_to_landmarks[0, prev] <= self._eps
+
+        # not interpolable skips
+        non_lin_skips = []
+
+        for i in range(1, len(X)):
+            #         for i in range(1, 10):
+            curr = closest_landmark[i]
+            assert dist_to_landmarks[i, curr] <= self._eps
+            if prev == curr or tuple(np.sort([prev, curr])) in self._complex.simplices[1]:
+                trans_mat[prev, curr] += 1
+            else:
+                mid_points = np.linspace(X[i - 1], X[i], 7)
+                mid_dists = distance_matrix(mid_points[1:-1], self._landmarks, p=self._p)
+                mid_lms = [np.argmin(mdists) for mdists in mid_dists]
+                # interpolated path
+                ip = np.concatenate(([prev], mid_lms, [curr]))
+                for l in range(len(ip) - 1):
+                    if ip[l] != ip[l + 1]:
+                        if tuple(np.sort([ip[l], ip[l + 1]])) in self._complex.simplices[1]:
+                            trans_mat[ip[l], ip[l + 1]] += 1
+                        else:
+                            non_lin_skips.append(i)
+            #                             print('tsk, tsk: ', i,prev,curr)
+            prev = curr
+
+        #         print(non_lin_skips)
+        # fix points that can't be linearly interpolated
+        if len(non_lin_skips) > 0:
+            dg = nx.from_numpy_array(np.where(trans_mat > 0, 1, 0), create_using=nx.DiGraph)
+
+            for i in range(len(non_lin_skips)):
+                #             for i in range(1, 2):
+                x0 = non_lin_skips[i]
+                src = closest_landmark[x0 - 1]
+                trg = closest_landmark[x0]
+                #                 print(i,x0,src,trg)
+                #                 print(self._landmarks[src], self._landmarks[trg])
+                try:
+                    paths = [p for p in nx.all_shortest_paths(dg, source=src, target=trg)]
+                    weight = 1. / len(paths)
+                    #                     print([p for p in paths], [src, trg])
+                    for path in paths:
+                        for l in range(len(path) - 1):
+                            trans_mat[path[l], path[l + 1]] += weight
+
+                except nx.NetworkXNoPath:
+                    print("no path from " + src + " to " + trg)
+
+        return trans_mat
 
 def symbolization(X, lms, eps=0, simplified=False):
     """ symbolization of a time series, a sequence of points is transformed into a list of integers (elements of

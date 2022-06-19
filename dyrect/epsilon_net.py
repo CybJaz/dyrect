@@ -1,3 +1,5 @@
+import itertools
+
 from gudhi import SimplexTree
 from itertools import combinations
 import numpy as np
@@ -91,6 +93,10 @@ class Complex():
     def dimension(self):
         return self._dim
 
+    @property
+    def nvertices(self):
+        return len(self.coordinates)
+
     def to_poset(self, idx=False):
         """
         Get the face-poset representation of a complex
@@ -101,6 +107,7 @@ class Complex():
         poset = Poset(nsimplices)
         sim2idx = dict()
         for i, s in zip(range(nsimplices), chain(*self.simplices.values())):
+            # print(i, s)
             sim2idx[s] = i
             if len(s) > 1:
                 for face in combinations(s, len(s) - 1):
@@ -117,7 +124,7 @@ class Complex():
         baricenters = []
         # poset = Poset(nsimplices)
         # sim2idx = dict()
-        simplex2baricenter = dict()
+        # simplex2baricenter = dict()
         for i, s in zip(range(nsimplices), chain(*self.simplices.values())):
             # sim2idx[s] = i
             bc = np.average(self.coordinates[list(s), :], axis=0)
@@ -159,7 +166,7 @@ class NerveComplex(Complex):
 
         if len(points > 0):
             for i in range(len(points)):
-                simplex = tuple(np.where(distances[i, :] <= eps)[0])
+                simplex = tuple(np.where(distances[i, :] <= eps * 1.15)[0])
                 sdim = len(simplex) - 1
                 if sdim == -1:
                     print(i, ': ', points[i], ' ', np.where(distances[i, :] <= eps * 1.))
@@ -236,7 +243,7 @@ class NerveComplex(Complex):
 
 
 class AlphaNerveComplex(NerveComplex):
-    def __init__(self, lms, eps, max_dim=-1, points=[]):
+    def __init__(self, lms, eps, max_dim=-1, points=[], patching=True):
         """
         :param lms:
         :param eps:
@@ -260,27 +267,32 @@ class AlphaNerveComplex(NerveComplex):
         # distances from points to landmarks
         distances = cdist(points, lms, 'euclidean')
 
-
-        # for each point get a sorted (increasing) list of landmarks no further than epsilon
+        # for each point get a sorted (increasing) list of landmarks no further than epsilon times coefficient
         eps_lms = []
         for x_arg_sorted, x in zip(np.argsort(distances, axis=1), range(num_of_points)):
             i = 0
-            while distances[x, x_arg_sorted[i]] < eps:
+            while distances[x, x_arg_sorted[i]] < eps * 2.:
                 i += 1
             eps_lms.append(x_arg_sorted[:i])
 
         for d in range(self.dimension + 1):
             self._simplices[d] = []
 
-        # 0-dimension
+        # 0-dimension; take centers of all cover elements that has non-empty its alpha cell part
         for x_eps_lms in eps_lms:
             assert len(x_eps_lms) >= 1
             new_simplex = tuple(x_eps_lms[:1],)
             if new_simplex not in self._simplices[0]:
                 self._simplices[0].append(new_simplex)
 
-        # 1 to d-dimension
+        # 1 to d-dimension;
+        # for dimension 2 - add a 2-simplex (a,b) if there exists a point x such that the list of
+        #   the closest landmarks starts either with (a,b,...) or (b,a,...)
+        # for dimension 3 - add a 3-simplex (a,b,c) if there exists a point x such that the list of
+        #   the closest landmarks starts with (a,b,c), e.g. (b,a,c,d,f,e,...),
+        #   and all faces of (a,b,c) are already in the complex
         for d in range(1,self.dimension + 1):
+            # print("Dimension: ", d)
             for x_eps_lms in eps_lms:
                 if len(x_eps_lms) >= d+1:
                     new_simplex = tuple(np.sort(x_eps_lms[:d+1]))
@@ -294,19 +306,69 @@ class AlphaNerveComplex(NerveComplex):
                     if bdQ and (new_simplex not in self._simplices[d]):
                         self._simplices[d].append(new_simplex)
 
-        # d+1 dimension
-        extra_simplices = []
-        for x_eps_lms in eps_lms:
-            if len(x_eps_lms) >= self.dimension + 2:
-                new_simplex = tuple(np.sort(x_eps_lms[:self.dimension + 2]))
-                # check if all boundary elements are already present
-                bdQ = True
-                for b in range(d + 1):
-                    boundary_simplex = new_simplex[:b] + new_simplex[b + 1:]
-                    if boundary_simplex not in self._simplices[d - 1]:
-                        bdQ = False
-                        break
-                if bdQ and (new_simplex not in self._simplices[d]):
-                    self._simplices[d].append(new_simplex)
+        if patching:
+            # d+1 dimension
+            extra_simplices = []
+            for x_eps_lms in eps_lms:
+                if len(x_eps_lms) >= self.dimension + 2:
+                    new_simplex = tuple(np.sort(x_eps_lms[:self.dimension + 2]))
+                    if new_simplex in extra_simplices:
+                        continue
+                    # # check if all boundary elements are already present
+                    # bdQ = True
+                    # for b in range(d + 1):
+                    #     boundary_simplex = new_simplex[:b] + new_simplex[b + 1:]
+                    #     if boundary_simplex not in self._simplices[d - 1]:
+                    #         bdQ = False
+                    #         break
+                    # if bdQ and (new_simplex not in self._simplices[d]):
+                    #     self._simplices[d].append(new_simplex)
 
+                    # 3-d case
+                    bdQ = True
+                    count_codim2 = dict()
+                    for s in combinations(new_simplex, self.dimension-1):
+                        count_codim2[s] = 0
+
+                    for boundary_simplex in combinations(new_simplex, self.dimension):
+                        if boundary_simplex in self.simplices[self.dimension-1]:
+                            for bbs in combinations(boundary_simplex, self.dimension-1):
+                                count_codim2[bbs] += 1
+                    if all([x == 2 for x in count_codim2.values()]):
+                        extra_simplices.append(new_simplex)
+                        # find two the most distant vertices:
+                        v_coords = np.array([self.coordinates[i] for i in new_simplex])
+
+                        v_max = []
+                        max_dist = -1
+                        min_dist = 10000000.
+                        for (v1, v2) in combinations(new_simplex, 2):
+                            if v1==v2 or (v1, v2) in self._simplices[1] or (v2, v1) in self._simplices[1]:
+                                continue
+                            new_dist = np.linalg.norm(self.coordinates[v1]-self.coordinates[v2])
+                            if new_dist > max_dist:
+                                max_dist = new_dist
+                                v_max = [v1, v2]
+                            # if new_dist < min_dist:
+                            #     min_dist = new_dist
+                            #     v_max = [v1, v2]
+                        # print(v_max)
+                        # v_dists = cdist(v_coords, v_coords)
+                        # v_max = np.unravel_index(np.argmax(v_dists), v_dists.shape)
+                        # dividing simplex
+                        div_simplex = set(new_simplex).difference(v_max)
+                        comp_simplex_1 = set(new_simplex).difference([v_max[0]])
+                        comp_simplex_2 = set(new_simplex).difference([v_max[1]])
+                        self._simplices[self.dimension-1].append(div_simplex)
+                        self._simplices[self.dimension].append(comp_simplex_1)
+                        self._simplices[self.dimension].append(comp_simplex_2)
+
+                        # print(div_simplex, comp_simplex_1, comp_simplex_2)
+                        # print(v_dists)
+                        # print(v_max)
+
+                        # print(count_codim2)
+
+        # for v in self.simplices[0]:
+        #     print(v, ' - ', self.coordinates[v[0]])
         # self._st.persistence()
