@@ -243,7 +243,7 @@ class NerveComplex(Complex):
 
 
 class AlphaNerveComplex(NerveComplex):
-    def __init__(self, lms, eps, max_dim=-1, points=[], patching=True):
+    def __init__(self, lms, eps, max_dim=-1, points=[], patching=True, record_witnesses=False):
         """
         :param lms:
         :param eps:
@@ -291,7 +291,7 @@ class AlphaNerveComplex(NerveComplex):
         # for dimension 3 - add a 3-simplex (a,b,c) if there exists a point x such that the list of
         #   the closest landmarks starts with (a,b,c), e.g. (b,a,c,d,f,e,...),
         #   and all faces of (a,b,c) are already in the complex
-        for d in range(1,self.dimension + 1):
+        for d in range(1, self.dimension + 1):
             # print("Dimension: ", d)
             for x_eps_lms in eps_lms:
                 if len(x_eps_lms) >= d+1:
@@ -306,6 +306,18 @@ class AlphaNerveComplex(NerveComplex):
                     if bdQ and (new_simplex not in self._simplices[d]):
                         self._simplices[d].append(new_simplex)
 
+        if record_witnesses:
+            self.non_witnesses = {0: [], 1: [], 2: []}
+            # print(self._simplices[2])
+            for x_arg_sorted, x in zip(np.argsort(distances, axis=1), range(num_of_points)):
+                for d in range(self.dimension+1):
+                    witnessed_simplex = tuple(np.sort(x_arg_sorted[:d+1]))
+                    print(witnessed_simplex)
+                    if witnessed_simplex not in self._simplices[d]:
+                        self.non_witnesses[d].append(x)
+            # print(self.non_witnesses[2])
+
+        ### PATCHING
         if patching:
             # d+1 dimension
             extra_simplices = []

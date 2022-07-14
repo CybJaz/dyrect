@@ -228,7 +228,7 @@ def logi_tent_test():
         knns[j, i, :] = knn2
 
     for ki, kv in enumerate(k_values):
-        knn_df = pd.DataFrame(data=knns[:,:,ki],  index=labels, columns=labels)
+        knn_df = pd.DataFrame(data=knns[:, :, ki],  index=labels, columns=labels)
         # knn_df.name
         print("K = " + str(kv))
         print(knn_df)
@@ -388,7 +388,6 @@ def conjugacy_nonaligned_series():
 
     to_compare = [logi_400_1, logi_395_1, logi_395_2, tent_400_1, tent_395_1, tent_395_2]
     labels = ["logi_400_1", "logi_395_1", "logi_395_2", "tent_400_1", "tent_395_1", "tent_395_2"]
-
 
     diffs = np.zeros((len(to_compare), len(to_compare)))
     for (i, j) in combinations(range(len(to_compare)), 2):
