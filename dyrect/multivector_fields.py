@@ -6,6 +6,7 @@ from itertools import combinations
 import numpy as np
 from math import inf
 
+
 class MVF:
 
     def __init__(self):
@@ -35,7 +36,7 @@ class MVF:
         return self._conley_index[mv_idx]
 
     def is_critical(self, mv_idx):
-        return np.sum(self._conley_index[mv_idx])>0
+        return np.sum(self._conley_index[mv_idx]) > 0
 
     @classmethod
     def from_cell_complex(cls, graph, cell_complex, assigning_style='balanced'):
@@ -83,7 +84,7 @@ class MVF:
             for simplex in cell_complex.simplices[level]:
                 sid = simplex2idx[simplex]
                 # if an edge is already assigned to a multivector then continue
-                if level == 1 and len(get_vec_of(sid))>1:
+                if level == 1 and len(get_vec_of(sid)) > 1:
                     continue
                 # simplices directly below the simplex, i.e. subsets of the simplex without a single element
                 belows = combinations(simplex, level)
@@ -103,7 +104,7 @@ class MVF:
                     # print(candidates)
                     # print([[idx2simplex[x]  for x in get_vec_of(v)] for v in candidates])
                     # the dimension of proto multivectors (0 is the highiest because the complex it is a nerve)
-                    candidates_levels = [min([len(idx2simplex[x])-1 for x in get_vec_of(v)]) for v in candidates]
+                    candidates_levels = [min([len(idx2simplex[x]) - 1 for x in get_vec_of(v)]) for v in candidates]
                     # print(candidates_levels)
                     min_candidates_levels = np.where(candidates_levels == np.min(candidates_levels))[0]
                     # print(min_candidates_levels)
@@ -128,23 +129,22 @@ class MVF:
         # poset of the order complex and index map
         order_poset, idx2oidx = order_complex.to_poset(idx=True)
 
-
         # a map translating original cells (vertices in the input complex) to indices in the final poset
         cell2idx = dict()
         for i in range(ncells):
-            idx = simplex2idx[tuple([i,])]
-            oidx = idx2oidx[tuple([idx,])]
+            idx = simplex2idx[tuple([i, ])]
+            oidx = idx2oidx[tuple([idx, ])]
             # print(i, oidx)
             cell2idx[i] = oidx
         #
 
-        mvf = {v:set() for v in vecs_ids}
+        mvf = {v: set() for v in vecs_ids}
         # order complex simplices
         oc_points = set(range(order_poset.npoints))
         for d in cell_complex.simplices.keys():
             for sigma in cell_complex.simplices[d]:
                 idx_poset = simplex2idx[sigma]
-                idx_oposet = idx2oidx[tuple([idx_poset,])]
+                idx_oposet = idx2oidx[tuple([idx_poset, ])]
                 upper_set = order_poset.above(idx_oposet)
                 v_points = oc_points.intersection(upper_set)
                 oc_points = oc_points.difference(v_points)
@@ -160,8 +160,7 @@ class MVF:
         #     for sigma in v:
         #         mv = mv.union(order_poset.above(sigma).intersection)
 
-
-        obj._point2simplex = {v: k for k,v in idx2oidx.items()}
+        obj._point2simplex = {v: k for k, v in idx2oidx.items()}
         obj._fspace = order_poset
         obj._partition = list(mvf.values())
         obj._order_complex = order_complex
@@ -189,6 +188,7 @@ class MVF:
             homology = st.persistence()
             # print(homology)
             betti = dict()
+
             # TODO: check
             for h in homology:
                 if h[1] == (1.0, inf):
@@ -199,19 +199,18 @@ class MVF:
                     if h[0] > max_dim:
                         max_dim = h[0]
                 elif h[1] == (0.0, 1.0):
-                    if h[0]+1 in betti:
-                        betti[h[0]+1] += 1
+                    if h[0] + 1 in betti:
+                        betti[h[0] + 1] += 1
                     else:
-                        betti[h[0]+1] = 1
-                    if h[0]+1 > max_dim:
-                        max_dim = h[0]+1
+                        betti[h[0] + 1] = 1
+                    if h[0] + 1 > max_dim:
+                        max_dim = h[0] + 1
 
-            obj._conley_index.append(tuple([betti[d] if d in betti else 0 for d in range(max_dim+1)]))
+            obj._conley_index.append(tuple([betti[d] if d in betti else 0 for d in range(max_dim + 1)]))
             # print(obj._conley_index[-1])
             # obj._is_critical.append()
 
-
-         # print([mvf._point2simplex[s] for s in v])
+        # print([mvf._point2simplex[s] for s in v])
 
         # return order_complex, order_poset, list(mvf.values()), oidx2osimplex
         return obj

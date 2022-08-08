@@ -1,5 +1,6 @@
 import dyrect as dy
-from dyrect import Complex, Poset, draw_complex, MVF, draw_poset, draw_planar_mvf, draw_transition_graph, draw_3D_mvf
+from dyrect import Complex, Poset, draw_complex, MVF, draw_poset, draw_planar_mvf, draw_transition_graph, draw_3D_mvf,\
+    sampled_2d_system, double_limit_cycle, limit_cycle
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -85,6 +86,7 @@ def mvf_from_cell_complex_2D():
         print([mvf._point2simplex[s] for s in v])
     plt.show()
 
+
 def mvf_on_tetrahedron():
     # nerve complex
     simplices = {0: [(0,), (1,), (2,), (3,)],
@@ -122,6 +124,7 @@ def mvf_on_tetrahedron():
     for i in range(mvf.complex.nvertices):
         print(i, ": ", mvf.complex.coordinates[i])
     plt.show()
+
 
 def mvf_from_cell_complex_1D():
     # nerve complex
@@ -229,6 +232,7 @@ def mvf_from_time_series():
 
     plt.show()
 
+
 def mvf_for_lorenz():
     n = 11000
     points = dy.lorenz_attractor(n, step=0.02)
@@ -278,6 +282,7 @@ def mvf_for_lorenz():
 
     plt.show()
 
+
 def mvf_on_torus():
     points = dy.torus_rotation(100000, rotation=np.sqrt(2))
     print(points.shape)
@@ -302,11 +307,204 @@ def mvf_on_torus():
     dy.draw_complex(nc)
     plt.show()
 
+
+def mvf_from_time_series():
+    np.random.seed(42)
+    points = np.array(
+        [np.cos(t * np.pi / 6.) * np.sin(t * np.pi / 12.) * 50. for t in np.arange(0, 5000, np.sqrt(2) / 20.)])
+
+    points = points + np.random.random(points.shape) * 2.2
+
+    series = points
+    series_emb = np.array(dy.embedding(series, 2, 20))
+    # take every k-th step
+    series_emb = np.take(series_emb, np.arange(0, len(series_emb), 9), axis=0)
+
+    eps = 11.
+    np.random.seed(42)
+    EN = dy.EpsilonNet(eps, 0)
+    EN.fit(series_emb)
+    lms = EN.landmarks
+
+    nc = dy.NerveComplex(lms, eps, 2, points=series_emb)
+
+    TM = dy.TransitionMatrix(lms, eps, alpha=True)
+    transitions = TM.transform(series_emb)
+    prob_matrix = dy.trans2prob(transitions)
+
+    GTM = dy.GeomTransitionMatrix(lms, nc, eps, alpha=True)
+    transitions = GTM.fit(series_emb)
+    gtm_prob_matrix = dy.trans2prob(transitions)
+    gtm_prob_matrix = np.where(gtm_prob_matrix > 0.2, gtm_prob_matrix, 0.0)
+
+    fig = plt.figure(figsize=(10, 8))
+    ax = plt.subplot()
+    plt.scatter(lms[:, 0], lms[:, 1], s=5.2)
+    for lm in lms:
+        crc = plt.Circle(lm, eps, color='r', alpha=0.05)
+        ax.add_patch(crc)
+    dy.draw_complex(nc, fig=fig, ax=ax)
+
+    fig = plt.figure(figsize=(10, 8))
+    rows = 2
+    cols = 2
+
+    # ax = plt.subplot(rows, cols, 1)
+    # plt.scatter(series_emb[:, 0], series_emb[:, 1], s=0.2)
+
+    # plt.show()
+    # fig = plt.figure(figsize=(10, 8))
+    # ax = plt.subplot(rows, cols, 1)
+    ax = plt.subplot(rows, cols, 1)
+    plt.scatter(series_emb[:, 0], series_emb[:, 1], s=0.2)
+    plt.scatter(lms[:, 0], lms[:, 1], s=5.2)
+    for lm in lms:
+        crc = plt.Circle(lm, eps, color='r', alpha=0.05)
+        ax.add_patch(crc)
+
+    # plt.show()
+    # fig = plt.figure(figsize=(10, 8))
+    # ax = plt.subplot(rows, cols, 1)
+    ax = plt.subplot(rows, cols, 2)
+    dy.draw_complex(nc, fig=fig, ax=ax)
+
+    # plt.show()
+    # fig = plt.figure(figsize=(10, 8))
+    # ax = plt.subplot(rows, cols, 1)
+    ax = plt.subplot(rows, cols, 3)
+    dy.draw_transition_graph(prob_matrix, lms, threshold=0.01, node_size=10, edge_size=8, fig=fig, ax=ax)
+
+    # plt.show()
+    # fig = plt.figure(figsize=(10, 8))
+    # ax = plt.subplot(rows, cols, 1)
+    ax = plt.subplot(rows, cols, 4)
+    dy.draw_transition_graph(gtm_prob_matrix, lms, threshold=0.01, node_size=10, edge_size=8, fig=fig, ax=ax)
+
+    # dy.draw_transition_graph(gtm_prob_matrix, lms, threshold=0.01, node_size=10, edge_size=8)
+
+    mvf = MVF.from_cell_complex(gtm_prob_matrix, nc, assigning_style='frivolous')
+    draw_planar_mvf(mvf, mode='all')
+
+    plt.show()
+
+
+def mvf_from_sampled_system():
+    np.random.seed(0)
+    nsp = 500
+    ts = 4
+    step = 0.2
+
+    limx = 1.7
+    # limx = 2.
+    bounds = np.array([[-limx, limx], [-limx, limx]])
+
+    np.random.seed(0)
+    # trajectories, starting_points = sampled_2d_system(double_limit_cycle, nsp, ts, step=step, bounds=bounds)
+    trajectories, starting_points = sampled_2d_system(limit_cycle, nsp, ts, step=step, bounds=bounds)
+    # trajectories = sampled_2d_system(limit_cycle, nsp, ts, step=step)
+    all_points = np.array([p for points in trajectories for p in points])
+
+
+    eps = 0.2
+    np.random.seed(2)
+    EN = dy.EpsilonNet(eps, 0)
+    EN.fit(all_points)
+    lms = EN.landmarks
+    nc = dy.AlphaNerveComplex(lms, eps, 2, points=all_points)
+    # nc = dy.NerveComplex(lms, eps, 2, points=all_points)
+
+    fig = plt.figure()
+    ax = plt.subplot()
+    # for tr in trajectories[:1000]:
+    for tr in trajectories:
+            ax.plot(tr[:, 0], tr[:, 1])
+
+    # fig = plt.figure()
+    # ax = plt.subplot()
+    # dy.draw_complex(nc, fig=fig, ax=ax)
+    #
+    plt.show()
+    fig.savefig('mvf_flow_5.png')
+
+    # TM = dy.TransitionMatrix(lms, eps, alpha=True)
+    # transitions = TM.transform(series_emb)
+    # prob_matrix = dy.trans2prob(transitions)
+    #
+    GTM = dy.GeomTransitionMatrix(lms, nc, eps, alpha=True)
+    transitions = GTM.fit(trajectories)
+    gtm_prob_matrix = dy.trans2prob(transitions)
+    # gtm_prob_matrix = np.where(gtm_prob_matrix > 0.02, gtm_prob_matrix, 0.0)
+
+    # fig = plt.figure(figsize=(10, 8))
+    # ax = plt.subplot()
+    # plt.scatter(lms[:, 0], lms[:, 1], s=5.2)
+    # for lm in lms:
+    #     crc = plt.Circle(lm, eps, color='r', alpha=0.05)
+    #     ax.add_patch(crc)
+    # dy.draw_complex(nc, fig=fig, ax=ax)
+    #
+    # fig = plt.figure(figsize=(10, 8))
+    # rows = 2
+    # cols = 2
+    #
+    # # ax = plt.subplot(rows, cols, 1)
+    # # plt.scatter(series_emb[:, 0], series_emb[:, 1], s=0.2)
+    #
+    # # plt.show()
+    # # fig = plt.figure(figsize=(10, 8))
+    # # ax = plt.subplot(rows, cols, 1)
+    # ax = plt.subplot(rows, cols, 1)
+    # plt.scatter(series_emb[:, 0], series_emb[:, 1], s=0.2)
+    # plt.scatter(lms[:, 0], lms[:, 1], s=5.2)
+    # for lm in lms:
+    #     crc = plt.Circle(lm, eps, color='r', alpha=0.05)
+    #     ax.add_patch(crc)
+    #
+    # # plt.show()
+    # # fig = plt.figure(figsize=(10, 8))
+    # # ax = plt.subplot(rows, cols, 1)
+    # ax = plt.subplot(rows, cols, 2)
+    # dy.draw_complex(nc, fig=fig, ax=ax)
+    #
+    # # plt.show()
+    # # fig = plt.figure(figsize=(10, 8))
+    # # ax = plt.subplot(rows, cols, 1)
+    # ax = plt.subplot(rows, cols, 3)
+    # dy.draw_transition_graph(prob_matrix, lms, threshold=0.01, node_size=10, edge_size=8, fig=fig, ax=ax)
+    #
+    # plt.show()
+
+    fig = plt.figure(figsize=(15,15))
+    ax = plt.subplot()
+    # ax = plt.subplot(rows, cols, 4)
+    dy.draw_transition_graph(gtm_prob_matrix, lms, threshold=0.01, node_size=10, edge_size=8, fig=fig, ax=ax)
+    plt.show()
+    fig.savefig('mvf_graph_5.png')
+
+    # # dy.draw_transition_graph(gtm_prob_matrix, lms, threshold=0.01, node_size=10, edge_size=8)
+    #
+    style = 'balanced'
+    # style = 'frivolous'
+    # style = 'prudent'
+    mvf = MVF.from_cell_complex(gtm_prob_matrix, nc, assigning_style=style)
+    fig = plt.figure(figsize=(14, 14))
+    ax = plt.subplot()
+    draw_planar_mvf(mvf, mode='all', figsize=(15,15), fig=fig, ax=ax)
+    fig.savefig('mvf_all_5.pdf')
+    plt.show()
+    fig = plt.figure(figsize=(14, 14))
+    ax = plt.subplot()
+    draw_planar_mvf(mvf, mode='crit', figsize=(15,15), fig=fig, ax=ax)
+    plt.show()
+    fig.savefig('mvf_crit_5.pdf')
+    #
+
 if __name__ == '__main__':
     # mvf_from_cell_complex_1D()
     # mvf_from_cell_complex_2D()
     # mvf_from_cell_complex_1_2D()
     # mvf_from_time_series()
+    mvf_from_sampled_system()
     # mvf_on_tetrahedron()
     # mvf_for_lorenz()
-    mvf_on_torus()
+    # mvf_on_torus()

@@ -17,7 +17,11 @@ def trans2prob(matrix):
 def embedding(points, dimension, delay):
     emb_indices = np.arange(dimension) * (delay + 1) + np.arange(
         np.max(points.shape[0] - (dimension - 1) * (delay + 1), 0)).reshape(-1, 1)
-    return points[emb_indices]
+    ep = points[emb_indices]
+    if len(points.shape) == 1:
+        return ep
+    else:
+        return ep[:, :, 0]
 
 
 class TransitionMatrix:
@@ -72,7 +76,7 @@ class TransitionMatrix:
 
 
 class GeomTransitionMatrix:
-    def __init__(self, landmarks, complex, epsilon, p=2, alpha=True):
+    def __init__(self, landmarks, scomplex, epsilon, p=2, alpha=True):
         """
         :param landmarks:
         :param epsilon:
@@ -84,67 +88,79 @@ class GeomTransitionMatrix:
         # p defines norm type
         self._p = p
         self._eps = epsilon
-        self._complex = complex
+        self._complex = scomplex
         self._alpha = alpha
 
     def fit(self, X, Y=None):
-        # TODO: what if alpha is false
-        # compute distances
-        dist_to_landmarks = distance_matrix(X, self._landmarks, p=self._p)
-        closest_landmark = np.argmin(dist_to_landmarks, axis=1)
+        """
+        Fit a sequenc
+        @param X: a sequence of trajectories
+        @param Y: nothing
+        @return:
+        """
+
         trans_mat = np.full((self._nlands, self._nlands), 0.)
 
-        prev = closest_landmark[0]
-        assert dist_to_landmarks[0, prev] <= self._eps
+        # fit for every trajectory
+        for sX in X:
+            # TODO: what if alpha is false
+            # compute distances
+            dist_to_landmarks = distance_matrix(sX, self._landmarks, p=self._p)
+            closest_landmark = np.argmin(dist_to_landmarks, axis=1)
 
-        # not interpolable skips
-        non_lin_skips = []
+            prev = closest_landmark[0]
+            assert dist_to_landmarks[0, prev] <= self._eps
 
-        for i in range(1, len(X)):
-            #         for i in range(1, 10):
-            curr = closest_landmark[i]
-            assert dist_to_landmarks[i, curr] <= self._eps
-            if prev == curr or tuple(np.sort([prev, curr])) in self._complex.simplices[1]:
-                trans_mat[prev, curr] += 1
-            else:
-                mid_points = np.linspace(X[i - 1], X[i], 7)
-                mid_dists = distance_matrix(mid_points[1:-1], self._landmarks, p=self._p)
-                mid_lms = [np.argmin(mdists) for mdists in mid_dists]
-                # interpolated path
-                ip = np.concatenate(([prev], mid_lms, [curr]))
-                for l in range(len(ip) - 1):
-                    if ip[l] != ip[l + 1]:
-                        if tuple(np.sort([ip[l], ip[l + 1]])) in self._complex.simplices[1]:
-                            trans_mat[ip[l], ip[l + 1]] += 1
-                        else:
-                            non_lin_skips.append(i)
-            #                             print('tsk, tsk: ', i,prev,curr)
-            prev = curr
+            # not interpolable skips
+            non_lin_skips = []
 
-        #         print(non_lin_skips)
-        # fix points that can't be linearly interpolated
-        if len(non_lin_skips) > 0:
-            dg = nx.from_numpy_array(np.where(trans_mat > 0, 1, 0), create_using=nx.DiGraph)
+            for i in range(1, len(sX)):
+                curr = closest_landmark[i]
+                assert dist_to_landmarks[i, curr] <= self._eps
+                # increment transition if we moved from one cover element to the other (or we stayed in the same)
+                # otherwise try to interpolate midpoints
+                if prev == curr or tuple(np.sort([prev, curr])) in self._complex.simplices[1]:
+                    trans_mat[prev, curr] += 1
+                else:
+                    mid_points = np.linspace(sX[i - 1], sX[i], 7)
+                    mid_dists = distance_matrix(mid_points[1:-1], self._landmarks, p=self._p)
+                    mid_lms = [np.argmin(mdists) for mdists in mid_dists]
+                    # interpolated path
+                    ip = np.concatenate(([prev], mid_lms, [curr]))
+                    for l in range(len(ip) - 1):
+                        if ip[l] != ip[l + 1]:
+                            if tuple(np.sort([ip[l], ip[l + 1]])) in self._complex.simplices[1]:
+                                trans_mat[ip[l], ip[l + 1]] += 1
+                            else:
+                                non_lin_skips.append(i)
+                prev = curr
 
-            for i in range(len(non_lin_skips)):
-                #             for i in range(1, 2):
-                x0 = non_lin_skips[i]
-                src = closest_landmark[x0 - 1]
-                trg = closest_landmark[x0]
-                #                 print(i,x0,src,trg)
-                #                 print(self._landmarks[src], self._landmarks[trg])
-                try:
-                    paths = [p for p in nx.all_shortest_paths(dg, source=src, target=trg)]
-                    weight = 1. / len(paths)
-                    #                     print([p for p in paths], [src, trg])
-                    for path in paths:
-                        for l in range(len(path) - 1):
-                            trans_mat[path[l], path[l + 1]] += weight
+            # fix points that can't be linearly interpolated by searching for the shortest path in the graph
+            if len(non_lin_skips) > 0:
+                dg = nx.from_numpy_array(np.where(trans_mat > 0, 1, 0), create_using=nx.DiGraph)
 
-                except nx.NetworkXNoPath:
-                    print("no path from " + src + " to " + trg)
+                for i in range(len(non_lin_skips)):
+                    x0 = non_lin_skips[i]
+                    src = closest_landmark[x0 - 1]
+                    trg = closest_landmark[x0]
+                    try:
+                        paths = [p for p in nx.all_shortest_paths(dg, source=src, target=trg)]
+                        weight = 1. / len(paths)
+                        #                     print([p for p in paths], [src, trg])
+                        for path in paths:
+                            for l in range(len(path) - 1):
+                                trans_mat[path[l], path[l + 1]] += weight
+
+                    # catch nx.NetworkXNoPath:
+                    # print("no path from " + src + " to " + trg)
+                    except nx.NetworkXNoPath as err:
+                        print("no path from " + str(src) + " to " + str(trg))
+                    else:
+                        print("something different")
+
 
         return trans_mat
+
 
 def symbolization(X, lms, eps=0, simplified=False):
     """ symbolization of a time series, a sequence of points is transformed into a list of integers (elements of
@@ -202,9 +218,10 @@ class Seer:
 
     def __init__(self, history, cover, eps=-1, simplified=False):
         """
-        :param history:
-        :param cover:
-        :param eps:
+        :param history: a time series used to create the database for predictions
+        :param cover: a set of landmarks defining the set of symbols
+        :param eps: if eps is -1 we are looking just for the closest landmark otherwise a distance less then epsilon is
+            required, if distance is larger than eps we put extra symbol '-1'
         :param TODO: simplified - reduce repeating consecutive symbols
         """
         # cover variable could be more abstract, for now it's just a collection of landmarks
@@ -230,7 +247,7 @@ class Seer:
 
     def predict(self, past, f, p=-1):
         dim = len(past[0])
-        assert len(past[0])==self._dimension
+        assert len(past[0]) == self._dimension
 
         # (p,f) - p-past steps, f-future steps predictions
         # TODO: p is not used

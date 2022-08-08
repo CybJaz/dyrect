@@ -17,6 +17,7 @@ def generate_points(system, dimension, starting_point, n_points=1000, int_step=0
         integrator.step()
     return points
 
+
 # EQUATIONS
 # ##############
 
@@ -28,6 +29,19 @@ def lorentz_eq(_, args):
     return [l_sigma * (args[1] - args[0]),
             args[0] * (l_rho - args[2]) - args[1],
             args[0] * args[1] - l_beta * args[2]]
+
+
+def limit_cycle(_, args):
+    a = 2.0
+    return np.array([a * args[0] - args[1] - a * args[0] * (pow(args[0], 2) + pow(args[1], 2)),
+                     a * args[1] + args[0] - a * args[1] * (pow(args[0], 2) + pow(args[1], 2))])
+
+
+def double_limit_cycle(_, args):
+    a = [2., .5]
+    return np.array([
+        -args[1] - args[0] * (pow(args[0], 2) + pow(args[1], 2) - a[0]) * (pow(args[0], 2) + pow(args[1], 2) - a[1]),
+        args[0] - args[1] * (pow(args[0], 2) + pow(args[1], 2) - a[0]) * (pow(args[0], 2) + pow(args[1], 2) - a[1])])
 
 
 # TODO: add noise to t step
@@ -51,8 +65,10 @@ def logistic_map(npoints, r=4, starting_point=1 / 3., symb=False):
     @param symb: compute sequence symbolically?
     @return:
     """
+
     def log_map(x):
         return r * x * (1 - x)
+
     if symb:
         points = [sym.sympify(starting_point)]
     else:
@@ -92,8 +108,8 @@ def tent_map(npoints, starting_point=1 / 2):
     return np.array([p.evalf() for p in points])
 
 
-# 2D TIME SERIES
-# ##############
+# ############## 2D TIME SERIES ##############
+# ############## ############## ##############
 
 def lemniscate(npoints, step=0.2, scale=1., tnoise=0.02, noise=0.05):
     times = np.empty((npoints,))
@@ -104,6 +120,31 @@ def lemniscate(npoints, step=0.2, scale=1., tnoise=0.02, noise=0.05):
     # return lemniscate_eq(np.arange(0., npoints * step * np.pi, step * np.pi), [scale]) + \
     #        np.random.normal(0, noise, (npoints, 2))
     # np.random.random_sample((npoints, 2))*noise
+
+
+def circle_rotation_interval(npoints, step=np.sqrt(2)/10., nonlin=1., starting_point=0):
+    """
+    :param npoints: number of generated points
+    :param step: rotation in radians
+    :param nonlin: parameter that makes a rotation non-linear, default=1.
+    :param starting_point:
+    :return:
+    """
+    points = np.empty((npoints,))
+    points[0] = starting_point
+    if nonlin == 1.:
+        for i in range(1, npoints):
+            points[i] = np.mod(points[i - 1] + step, 1.)
+    else:
+        for i in range(1, npoints):
+            points[i] = np.power(np.mod(np.power(points[i-1], nonlin) + step, 1.), 1/nonlin)
+        # print(points)
+
+    crc_points = np.empty((npoints, 2))
+    for i, p in enumerate(points):
+        # print(p)
+        crc_points[i, :] = np.array([np.cos(p*2*pi), np.sin(p*2*pi)])
+    return crc_points
 
 
 def circle_rotation(npoints, step=pi / 10, scale=1., starting_point=np.array([1, 0])):
@@ -122,8 +163,46 @@ def circle_rotation(npoints, step=pi / 10, scale=1., starting_point=np.array([1,
     return points * scale
 
 
-# 3D TIME SERIES
-# ##############
+# ############## 2D SAMPLED SYSTEMS ##############
+# ############## ################## ##############
+
+
+def sampled_2d_system(system, nsp, ts, step=0.02, adaptive_step=False, bounds=np.array([[-2, 2], [-2, 2]])):
+    """
+    @param system:
+    @param nsp: number of starting points
+    @param ts: number of steps forward per starting point
+    @param step: iteration step
+    @param adaptive_step: should integration be adaptive with respect to time step
+    @param bounds: the bounds of the system, trajectories will be trimmed if outside of the range
+    @return: a family of trajectories
+    """
+    trajectories = []
+    points_range = bounds[:, 1] - bounds[:, 0]
+    starting_points = np.random.random((nsp, 2)) * points_range + bounds[:, 0]
+
+    for sp in starting_points:
+        integrator = RK45(system, 0, sp, ts,
+                          first_step=step, max_step=(4 * step if adaptive_step else step))
+        trajectory = []
+        for i in range(ts):
+            trajectory.append(integrator.y)
+            if integrator.status == 'running':
+                integrator.step()
+            else:
+                print('reloading integrator at ' + str(i))
+                integrator = RK45(system, 0, trajectory[i], 10000,
+                                  first_step=step, max_step=(4 * step if adaptive_step else step))
+            # if bounds[0, 0] > integrator.y[0] > bounds[0, 1] and \
+            #         bounds[1, 0] > integrator.y[1] > bounds[1, 1]:
+            #     continue
+        trajectories.append(np.array(trajectory))
+
+    return trajectories, starting_points
+
+
+# ############## 2D TIME SERIES ##############
+# ############## ############## ##############
 
 def lorenz_attractor(npoints, step=0.02, adaptive_step=False, starting_point=None, skip=100):
     if starting_point is None:

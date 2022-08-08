@@ -55,9 +55,9 @@ class EpsilonNet:
     def landmarks(self):
         return self._landmarks
 
-    @property
-    def complex(self):
-        return self._complex
+    # @property
+    # def complex(self):
+    #     return self._complex
 
 class Complex():
     def __init__(self, max_dim=-1):
@@ -271,7 +271,7 @@ class AlphaNerveComplex(NerveComplex):
         eps_lms = []
         for x_arg_sorted, x in zip(np.argsort(distances, axis=1), range(num_of_points)):
             i = 0
-            while distances[x, x_arg_sorted[i]] < eps * 2.:
+            while distances[x, x_arg_sorted[i]] < eps * 2.3:
                 i += 1
             eps_lms.append(x_arg_sorted[:i])
 
@@ -347,7 +347,7 @@ class AlphaNerveComplex(NerveComplex):
                             for bbs in combinations(boundary_simplex, self.dimension-1):
                                 count_codim2[bbs] += 1
                     if all([x == 2 for x in count_codim2.values()]):
-                        extra_simplices.append(new_simplex)
+                        extra_simplices.append(tuple(new_simplex))
                         # find two the most distant vertices:
                         v_coords = np.array([self.coordinates[i] for i in new_simplex])
 
@@ -368,12 +368,15 @@ class AlphaNerveComplex(NerveComplex):
                         # v_dists = cdist(v_coords, v_coords)
                         # v_max = np.unravel_index(np.argmax(v_dists), v_dists.shape)
                         # dividing simplex
-                        div_simplex = set(new_simplex).difference(v_max)
-                        comp_simplex_1 = set(new_simplex).difference([v_max[0]])
-                        comp_simplex_2 = set(new_simplex).difference([v_max[1]])
-                        self._simplices[self.dimension-1].append(div_simplex)
-                        self._simplices[self.dimension].append(comp_simplex_1)
-                        self._simplices[self.dimension].append(comp_simplex_2)
+                        div_simplex = list(set(new_simplex).difference(v_max))
+                        comp_simplex_1 = list(set(new_simplex).difference([v_max[0]]))
+                        comp_simplex_2 = list(set(new_simplex).difference([v_max[1]]))
+                        div_simplex.sort()
+                        comp_simplex_1.sort()
+                        comp_simplex_2.sort()
+                        self._simplices[self.dimension-1].append(tuple(div_simplex))
+                        self._simplices[self.dimension].append(tuple(comp_simplex_1))
+                        self._simplices[self.dimension].append(tuple(comp_simplex_2))
 
                         # print(div_simplex, comp_simplex_1, comp_simplex_2)
                         # print(v_dists)
