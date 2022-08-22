@@ -1,7 +1,7 @@
 import numpy as np
 from math import pi
 from scipy.integrate import RK45
-import sympy as sym
+# import sympy as sym
 
 
 def generate_points(system, dimension, starting_point, n_points=1000, int_step=0.02):
@@ -70,7 +70,9 @@ def logistic_map(npoints, r=4, starting_point=1 / 3., symb=False):
         return r * x * (1 - x)
 
     if symb:
-        points = [sym.sympify(starting_point)]
+        assert not symb
+        print("symbolic computations removed for now")
+        # points = [sym.sympify(starting_point)]
     else:
         points = [starting_point]
     for i in range(1, npoints):
@@ -122,13 +124,14 @@ def lemniscate(npoints, step=0.2, scale=1., tnoise=0.02, noise=0.05):
     # np.random.random_sample((npoints, 2))*noise
 
 
-def circle_rotation_interval(npoints, step=np.sqrt(2)/10., nonlin=1., starting_point=0):
+def circle_rotation_interval(npoints, step=np.sqrt(2)/10., nonlin=1., starting_point=0, output_on_circle=False):
     """
-    :param npoints: number of generated points
-    :param step: rotation in radians
-    :param nonlin: parameter that makes a rotation non-linear, default=1.
-    :param starting_point:
-    :return:
+    @param npoints: number of generated points
+    @param step: a defining rotation, 1 means a full rotation
+    @param nonlin: parameter that makes a rotation non-linear, default=1.
+    @param starting_point:
+    @param output_on_circle: should output points be 1D or 2D, default=false=1D
+    @return:
     """
     points = np.empty((npoints,))
     points[0] = starting_point
@@ -140,12 +143,29 @@ def circle_rotation_interval(npoints, step=np.sqrt(2)/10., nonlin=1., starting_p
             points[i] = np.power(np.mod(np.power(points[i-1], nonlin) + step, 1.), 1/nonlin)
         # print(points)
 
-    crc_points = np.empty((npoints, 2))
-    for i, p in enumerate(points):
-        # print(p)
-        crc_points[i, :] = np.array([np.cos(p*2*pi), np.sin(p*2*pi)])
-    return crc_points
+    if output_on_circle:
+        crc_points = np.empty((npoints, 2))
+        for i, p in enumerate(points):
+            # print(p)
+            crc_points[i, :] = np.array([np.cos(p*2*pi), np.sin(p*2*pi)])
+        return crc_points
+    else:
+        return points
 
+
+def torus_rotation_interval(npoints, steps=np.array([np.sqrt(2)/10., np.sqrt(3)/10.]),
+                            starting_point=np.array([0., 0.])):
+    """
+    @param npoints: number of generated points
+    @param steps: rotations along each axis, 1 means a full rotation, should be an np.array
+    @param starting_point:
+    @return:
+    """
+    points = np.empty((npoints, 2))
+    points[0, :] = starting_point
+    for i in range(1, npoints):
+        points[i] = np.mod(points[i - 1] + steps, 1.)
+    return points
 
 def circle_rotation(npoints, step=pi / 10, scale=1., starting_point=np.array([1, 0])):
     """
@@ -204,7 +224,7 @@ def sampled_2d_system(system, nsp, ts, step=0.02, adaptive_step=False, bounds=np
 # ############## 2D TIME SERIES ##############
 # ############## ############## ##############
 
-def lorenz_attractor(npoints, step=0.02, adaptive_step=False, starting_point=None, skip=100):
+def lorenz_attractor(npoints, step=0.02, adaptive_step=False, starting_point=None, skip=2000):
     if starting_point is None:
         starting_point = [1., 1., 1.]
     points = np.empty((npoints, 3))
