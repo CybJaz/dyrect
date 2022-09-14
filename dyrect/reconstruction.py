@@ -199,6 +199,7 @@ class Future:
     counter: int
     occurences: list
 
+
 @dataclass
 class Prediction:
     past: tuple

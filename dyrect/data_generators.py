@@ -31,6 +31,15 @@ def lorentz_eq(_, args):
             args[0] * args[1] - l_beta * args[2]]
 
 
+def dadras_eq(_, args):
+    da = 8.
+    db = 40.
+    dc = 14.9
+    return [da*args[0] - args[1]*args[2] + args[3],
+            args[0]*args[2] - db*args[1],
+            args[0]*args[1] - dc*args[2] + args[0]*args[3],
+            -args[1]]
+
 def limit_cycle(_, args):
     a = 2.0
     return np.array([a * args[0] - args[1] - a * args[0] * (pow(args[0], 2) + pow(args[1], 2)),
@@ -221,7 +230,7 @@ def sampled_2d_system(system, nsp, ts, step=0.02, adaptive_step=False, bounds=np
     return trajectories, starting_points
 
 
-# ############## 2D TIME SERIES ##############
+# ############## 3D TIME SERIES ##############
 # ############## ############## ##############
 
 def lorenz_attractor(npoints, step=0.02, adaptive_step=False, starting_point=None, skip=2000):
@@ -257,6 +266,31 @@ def torus_rotation(npoints, ang_step=0.02, rotation=0.1, radius=.25):
         radius * np.sin(p)] for p, t in zip(angles_phi, angles_theta)])
     return torus_points
 
+
+# ############## 4D TIME SERIES ##############
+# ############## ############## ##############
+
+
+def dadras_attractor(npoints, step=0.01, adaptive_step=False, starting_point=None, skip=5000):
+    if starting_point is None:
+        starting_point = [10., 1., 10., 1.]
+    points = np.empty((npoints, 4))
+    integrator = RK45(dadras_eq, 0, starting_point, 10000,
+                      first_step=step, max_step=(4 * step if adaptive_step else step))
+
+    # get closer to the attractor first
+    for _ in range(skip):
+        integrator.step()
+
+    for i in range(npoints):
+        points[i] = integrator.y
+        if integrator.status == 'running':
+            integrator.step()
+        else:
+            print('reloading integrator at ' + str(i))
+            integrator = RK45(dadras_eq, 0, points[i], 10000,
+                              first_step=step, max_step=(4 * step if adaptive_step else step))
+    return points
 
 # 2D POINT CLOUDS
 # ##############

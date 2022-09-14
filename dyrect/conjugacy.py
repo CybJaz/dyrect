@@ -261,7 +261,7 @@ def conjugacy_test(tsX, tsY, h, k=None, t=None, dist_fun=None):
                 # old_im_hdist = (directed_hausdorff(hfknnX, gknnY)[0],
                 #                    directed_hausdorff(gknnY, hfknnX)[0])
                 #
-                im_hdist = hausdorff_distance(hfknnX, gknnY, dist_fun)
+                im_hdist = hausdorff_distance(hfknnX, gknnY, distf)
                 # sym_im_hdist = hausdorff_distance(gknnY, hfknnX, dist_fun)
                 # if im_hdist > 0.:
                 #     print("huh")
@@ -276,7 +276,7 @@ def conjugacy_test(tsX, tsY, h, k=None, t=None, dist_fun=None):
                 # xyz = accumulated_hausdorff[(kv, tv)]
                 accumulated_hausdorff[(kv, tv)].append(im_hdist)
 
-    distsY = cdist(tsY, tsY, dist_fun)
+    distsY = cdist(tsY, tsY, distf)
     max_distY = np.max(distsY)
     diffs = np.zeros((len(k), len(t)))
     for it, tv in enumerate(t):
@@ -321,6 +321,8 @@ def neigh_conjugacy_test(tsX, tsY, h, k=None, t=None, dist_fun=None):
     nnX = np.argsort(distsX, axis=1)
     nnY = np.argsort(distsY, axis=1)
 
+    allstats = np.zeros((len(tsX), len(k), len(t)))
+
     print(tsX.shape, tsY.shape)
     accumulated_hausdorff = {}
     for tv in t:
@@ -362,6 +364,7 @@ def neigh_conjugacy_test(tsX, tsY, h, k=None, t=None, dist_fun=None):
 
                 im_hdist = hausdorff_distance(hfknnX, ghknnY, distf)
                 accumulated_hausdorff[(kv, tv)].append(im_hdist)
+                # allstats[i, ik, it] = im_hdist
 
     distsY = cdist(tsY, tsY, distf)
     max_distY = np.max(distsY)
@@ -370,5 +373,8 @@ def neigh_conjugacy_test(tsX, tsY, h, k=None, t=None, dist_fun=None):
         for ik, kv in enumerate(k):
             diffs[ik, it] = np.sum(accumulated_hausdorff[(kv, tv)]) / (len(accumulated_hausdorff[(kv, tv)]) * max_distY)
 
+#    if True:
+#        return diffs, allstats
+#    else:
     print(diffs)
     return diffs
