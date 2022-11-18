@@ -162,6 +162,7 @@ def fnn(ts1, ts2, r=None, dist_fun=None):
 
     fnns1 = []
     fnns2 = []
+    # TODO: it would me more efficient to inverse the loops
     for rv in r:
         fnn1_div = 0
         fnn2_div = 0
@@ -169,6 +170,8 @@ def fnn(ts1, ts2, r=None, dist_fun=None):
         fnn2_num = 0
         for i in range(n):
             v1 = H(std1 / rv - dists1[i, nn1[i]])
+            # print(rv, i, dists2[i, nn1[i]], dists1[i, nn1[i]])
+            # print(dists2[i, nn1[i]]/ dists1[i, nn1[i]])
             fnn1_num += H(dists2[i, nn1[i]] / dists1[i, nn1[i]] - rv) * v1
             fnn1_div += v1
 
@@ -315,8 +318,8 @@ def neigh_conjugacy_test(tsX, tsY, h, k=None, t=None, dist_fun=None):
     maxk = np.max(k)
     maxt = np.max(t)
 
-    distsX = cdist(tsX[:-maxt], tsX[:-maxt], distf)
-    distsY = cdist(tsY[:-maxt], tsY[:-maxt], distf)
+    distsX = cdist(tsX[:-maxt], tsX[:-2* maxt], distf)
+    distsY = cdist(tsY[:-maxt], tsY[:-2* maxt], distf)
 
     nnX = np.argsort(distsX, axis=1)
     nnY = np.argsort(distsY, axis=1)
@@ -330,7 +333,7 @@ def neigh_conjugacy_test(tsX, tsY, h, k=None, t=None, dist_fun=None):
             accumulated_hausdorff[(kv, tv)] = []
     # print(t, k)
     # mk in the variable name denotes that someting is for maxk, only 'k' denotes that it is k-specific
-    for i in range(len(tsX) - maxt):
+    for i in range(len(tsX) - maxt - 1):
         # print(i)
         # take h images of k nearest neigh. of x_i - h(Ux)
         hmknnX = h(np.array([tsX[x] for x in nnX[i, :maxk + 1]]))
@@ -341,13 +344,14 @@ def neigh_conjugacy_test(tsX, tsY, h, k=None, t=None, dist_fun=None):
             hmknnX = hmknnX.reshape((1, 1))
         # print(hmknnX.shape, tsY[:-maxt].shape)
         # take h images of k nearest neigh. of x_i - h(Ux) and compute distances to points in Y
-        knns_dists = cdist(hmknnX, tsY[:-maxt], distf)
+        knns_dists = cdist(hmknnX, tsY[:-2*maxt], distf)
 
         for it, tv in enumerate(t):
             # push t-times k-neigh of x_i forward and then compute the image - h(f^t(Ux))
+            # print(nnX[i, :maxk + 1])
+            # print(nnX[i, :maxk + 1] + tv)
             hfmknnX = h(np.array([tsX[x + tv] for x in nnX[i, :maxk + 1]]))
             # find indices of nearest neighbours of points in that image - denote it Vx
-            # TODO: is this maxk here unnecessary?
             idx_mknnY = np.argmin(knns_dists, axis=1)
             for ik, kv in enumerate(k):
                 # push t-times k-neigh of x_i forward and then compute the image - h(f^t(Ux))

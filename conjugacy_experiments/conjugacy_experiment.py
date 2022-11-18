@@ -1,10 +1,12 @@
+from PIL.ImagePalette import load
+
 import dyrect as dy
 from itertools import combinations
 import numpy as np
 import numba
 import pandas as pd
 
-out_dir = "/Users/cybjaz/workspace/dyrect/experiments/conjugacy_experiment_output/"
+out_dir = "/Users/cybjaz/workspace/dyrect/conjugacy_experiments/conjugacy_experiment_output/"
 log_dir = 'log_map/'
 rot_dir = 'circle_rotation/'
 lor_dir = 'lorenz/'
@@ -99,6 +101,7 @@ def embedding_homeomorphisms(data, base_ts, dl=5, emb_ts='emb'):
 
             def h(x):
                 points = []
+                # print(x)
                 for p in x:
                     idx = np.argwhere(ts1 == p)[0, 0]
                     points.append(refference_sequence[idx])
@@ -113,6 +116,8 @@ def embedding_homeomorphisms(data, base_ts, dl=5, emb_ts='emb'):
 ########################################################
 ############### Logistic map experiments ###############
 ########################################################
+
+# <editor-fold desc="Logistic map">
 def generate_log_tent_data(n=500, starting_points=None, log_parameters=None):
     # starting point
     # starting_points = [sympy.Rational(20, 100), sympy.Rational(21, 100), sympy.Rational(25, 100)]
@@ -176,8 +181,8 @@ def experiment_log_rv_grid():
     log_params = np.arange(4., 3.8, -0.005)
     total_steps = len(log_params)
     data = generate_log_tent_data(n=2000, starting_points=[0.2], log_parameters=log_params)
-    kv = [5, 10]
-    rv = [2, 3]
+    kv = [1, 3, 5, 10]
+    rv = [2, 3, 5, 8]
     # tv = list(range(1, 20, 5))
     # tv = [1, 3, 5, 10, 15, 20]
     tv = [1, 3, 5, 10, 20]
@@ -202,7 +207,7 @@ def experiment_log_rv_grid():
         else:
             ts2 = data[k2]
         new_n = min(len(ts1), len(ts2))
-        conj_diffs[j, :, :] = dy.conjugacy_test(ts1[:new_n], ts2[:new_n], id, k=kv, t=tv)
+        # conj_diffs[j, :, :] = dy.conjugacy_test(ts1[:new_n], ts2[:new_n], id, k=kv, t=tv)
         knn1, knn2 = dy.conjugacy_test_knn(ts1[:new_n], ts2[:new_n], k=kv)
         knns_diffs[j, :, 0] = knn1
         knns_diffs[j, :, 1] = knn2
@@ -210,12 +215,12 @@ def experiment_log_rv_grid():
         fnns_diffs[j, :, 0] = fnn1
         fnns_diffs[j, :, 1] = fnn2
 
-    for it, t in enumerate(tv):
-        conj_df = pd.DataFrame(data=np.transpose(conj_diffs[:, :, it]), index=[str(k) for k in kv],
-                               columns=[f_label(r) for r in log_params])
-        strt = str(t) if t > 9 else '0' + str(t)
-        conj_df.to_csv(out_dir + base_name + '_t' + strt + '_n' + str(npoints) + '.csv')
-        print(conj_df.to_markdown())
+    # for it, t in enumerate(tv):
+    #     conj_df = pd.DataFrame(data=np.transpose(conj_diffs[:, :, it]), index=[str(k) for k in kv],
+    #                            columns=[f_label(r) for r in log_params])
+    #     strt = str(t) if t > 9 else '0' + str(t)
+    #     conj_df.to_csv(out_dir + base_name + '_t' + strt + '_n' + str(npoints) + '.csv')
+    #     print(conj_df.to_markdown())
 
     knns1_df = pd.DataFrame(data=np.transpose(knns_diffs[:, :, 0]), index=[str(k) for k in kv],
                             columns=[f_label(r) for r in log_params])
@@ -232,12 +237,13 @@ def experiment_log_rv_grid():
     fnns2_df = pd.DataFrame(data=np.transpose(fnns_diffs[:, :, 1]), index=[str(r) for r in rv],
                             columns=[f_label(r) for r in log_params])
     fnns2_df.to_csv(out_dir + base_name + '_fnn2' + '_n' + str(npoints) + '.csv')
+# </editor-fold>
 
 
 ###########################################################
 ############### Circle rotation experiments ###############
 ###########################################################
-
+# <editor-fold desc="Circle rotation">
 
 def generate_circle_rotation_data_test(n=1000, starting_points=None, rotations=None, nonlin_params=None):
     """
@@ -269,7 +275,7 @@ def experiment_rotation():
     n = 2000
     starting_points = np.array([0., 0.25])
     starting_points = np.array([0.])
-    rotations = [np.sqrt(2) / 10., (np.sqrt(2) + 0.2) / 10., (np.sqrt(2)) / 5.]
+    rotations = [np.sqrt(2) / 10., (np.sqrt(2) + 0.2) / 10., 2 * (np.sqrt(2)) / 10.]
     data = generate_circle_rotation_data_test(n=n, starting_points=starting_points,
                                               rotations=rotations, nonlin_params=[2.])
 
@@ -294,7 +300,7 @@ def experiment_rotation():
     kv = [3, 5]
     tv = [5, 10]
     rv = [2, 3]
-    experiment(data, rot_dir + 'rotation_n' + str(n), kv, tv, rv, True, True, homeo, pairs=pairs,
+    experiment(data, rot_dir + 'rotation_n' + str(n), kv, tv, rv, True, False, homeo, pairs=pairs,
                dist_fun=sphere_max_dist)
 
 
@@ -304,7 +310,7 @@ def experiment_rotation_noise_grid():
     power_param = 2.
     data = generate_circle_rotation_data_test(n=2000, rotations=[base_angle], nonlin_params=[power_param])
     kv = [1, 3, 5, 10]
-    rv = [2, 3]
+    rv = [2, 3, 5, 8]
     tv = [1, 3, 5, 10]
     keys = [k for k in data.keys()]
     labels = [str(k) for k in keys]
@@ -342,51 +348,54 @@ def experiment_rotation_noise_grid():
         else:
             ts2 = data[k2]
         new_n = min(len(ts1), len(ts2))
-        conj_diffs[j - 1, :, :] = dy.conjugacy_test(ts1[:new_n], ts2[:new_n], homeo, k=kv, t=tv,
-                                                    dist_fun=sphere_max_dist)
-        knn1, knn2 = dy.conjugacy_test_knn(ts1[:new_n], ts2[:new_n], k=kv, dist_fun=sphere_max_dist)
-        knns_diffs[j - 1, :, 0] = knn1
-        knns_diffs[j - 1, :, 1] = knn2
+        # conj_diffs[j - 1, :, :] = dy.conjugacy_test(ts1[:new_n], ts2[:new_n], homeo, k=kv, t=tv,
+        #                                             dist_fun=sphere_max_dist)
+        # knn1, knn2 = dy.conjugacy_test_knn(ts1[:new_n], ts2[:new_n], k=kv, dist_fun=sphere_max_dist)
+        # knns_diffs[j - 1, :, 0] = knn1
+        # knns_diffs[j - 1, :, 1] = knn2
         fnn1, fnn2 = dy.fnn(ts1[:new_n], ts2[:new_n], r=rv, dist_fun=sphere_max_dist)
         fnns_diffs[j - 1, :, 0] = fnn1
         fnns_diffs[j - 1, :, 1] = fnn2
 
-    for it, t in enumerate(tv):
-        conj_df = pd.DataFrame(data=np.transpose(conj_diffs[:, :, it]), index=[str(k) for k in kv],
-                               columns=column_labels)
-        strt = str(t) if t > 9 else '0' + str(t)
-        conj_df.to_csv(out_dir + base_name + '_t' + strt + '_n' + str(npoints) + '.csv')
-        print(conj_df.to_markdown())
-
-    knns1_df = pd.DataFrame(data=np.transpose(knns_diffs[:, :, 0]), index=[str(k) for k in kv],
-                            columns=column_labels)
-    knns1_df.to_csv(out_dir + base_name + '_knn1' + '_n' + str(npoints) + '.csv')
-    knns2_df = pd.DataFrame(data=np.transpose(knns_diffs[:, :, 1]), index=[str(k) for k in kv],
-                            columns=column_labels)
-    knns2_df.to_csv(out_dir + base_name + '_knn2' + '_n' + str(npoints) + '.csv')
-    print(knns1_df.to_markdown())
-    print(knns2_df.to_markdown())
+    # for it, t in enumerate(tv):
+    #     conj_df = pd.DataFrame(data=np.transpose(conj_diffs[:, :, it]), index=[str(k) for k in kv],
+    #                            columns=column_labels)
+    #     strt = str(t) if t > 9 else '0' + str(t)
+    #     conj_df.to_csv(out_dir + rot_dir + base_name + '_t' + strt + '_n' + str(npoints) + '.csv')
+    #     print(conj_df.to_markdown())
+    #
+    # knns1_df = pd.DataFrame(data=np.transpose(knns_diffs[:, :, 0]), index=[str(k) for k in kv],
+    #                         columns=column_labels)
+    # knns1_df.to_csv(out_dir + rot_dir + base_name + '_knn1' + '_n' + str(npoints) + '.csv')
+    # knns2_df = pd.DataFrame(data=np.transpose(knns_diffs[:, :, 1]), index=[str(k) for k in kv],
+    #                         columns=column_labels)
+    # knns2_df.to_csv(out_dir + rot_dir + base_name + '_knn2' + '_n' + str(npoints) + '.csv')
+    # print(knns1_df.to_markdown())
+    # print(knns2_df.to_markdown())
 
     fnns1_df = pd.DataFrame(data=np.transpose(fnns_diffs[:, :, 0]), index=[str(r) for r in rv],
                             columns=column_labels)
-    fnns1_df.to_csv(out_dir + base_name + '_fnn1' + '_n' + str(npoints) + '.csv')
+    fnns1_df.to_csv(out_dir + rot_dir + base_name + '_fnn1' + '_n' + str(npoints) + '.csv')
     fnns2_df = pd.DataFrame(data=np.transpose(fnns_diffs[:, :, 1]), index=[str(r) for r in rv],
                             columns=column_labels)
-    fnns2_df.to_csv(out_dir + base_name + '_fnn2' + '_n' + str(npoints) + '.csv')
+    fnns2_df.to_csv(out_dir + rot_dir + base_name + '_fnn2' + '_n' + str(npoints) + '.csv')
 
 
 def experiment_rotation_int_rv_grid():
     # rotations = np.arange(0.05, 0.751, 0.025)
     npoints = 2000
     base_angle = np.sqrt(2) / 10
-    nsteps = 50
+    # nsteps = 50
+    # step = base_angle / (2 * nsteps)
+    # rotations = [base_angle + (step * (i - nsteps)) for i in range(int(nsteps * 3.5))]
+    nsteps = 2
     step = base_angle / (2 * nsteps)
     rotations = [base_angle + (step * (i - nsteps)) for i in range(int(nsteps * 3.5))]
     total_steps = nsteps * 3.5
     print(np.round(rotations, 4))
     data = generate_circle_rotation_data_test(n=2000, rotations=rotations)
-    kv = [1, 3, 5, 10]
-    rv = [1, 2, 3]
+    kv = [1, 5, 10, 20]
+    rv = [1, 2, 3, 5, 8]
     # tv = list(range(1, 20, 5))
     # tv = [1, 3, 5, 10, 15, 20]
     tv = [1, 3, 5, 10]
@@ -411,36 +420,40 @@ def experiment_rotation_int_rv_grid():
         else:
             ts2 = data[k2]
         new_n = min(len(ts1), len(ts2))
-        conj_diffs[j, :, :] = dy.conjugacy_test(ts1[:new_n], ts2[:new_n], id, k=kv, t=tv, dist_fun=sphere_max_dist)
-        knn1, knn2 = dy.conjugacy_test_knn(ts1[:new_n], ts2[:new_n], k=kv, dist_fun=sphere_max_dist)
-        knns_diffs[j, :, 0] = knn1
-        knns_diffs[j, :, 1] = knn2
+        # conj_diffs[j, :, :] = dy.conjugacy_test(ts1[:new_n], ts2[:new_n], id, k=kv, t=tv, dist_fun=sphere_max_dist)
+        # knn1, knn2 = dy.conjugacy_test_knn(ts1[:new_n], ts2[:new_n], k=kv, dist_fun=sphere_max_dist)
+        # knns_diffs[j, :, 0] = knn1
+        # knns_diffs[j, :, 1] = knn2
+        if j == 3:
+            print(k2)
         fnn1, fnn2 = dy.fnn(ts1[:new_n], ts2[:new_n], r=rv, dist_fun=sphere_max_dist)
         fnns_diffs[j, :, 0] = fnn1
         fnns_diffs[j, :, 1] = fnn2
 
-    for it, t in enumerate(tv):
-        conj_df = pd.DataFrame(data=np.transpose(conj_diffs[:, :, it]), index=[str(k) for k in kv],
-                               columns=[f_label(r) for r in rotations])
-        strt = str(t) if t > 9 else '0' + str(t)
-        conj_df.to_csv(out_dir + base_name + '_t' + strt + '_n' + str(npoints) + '.csv')
-        print(conj_df.to_markdown())
+    # for it, t in enumerate(tv):
+    #     conj_df = pd.DataFrame(data=np.transpose(conj_diffs[:, :, it]), index=[str(k) for k in kv],
+    #                            columns=[f_label(r) for r in rotations])
+    #     strt = str(t) if t > 9 else '0' + str(t)
+    #     conj_df.to_csv(out_dir + rot_dir + base_name + '_t' + strt + '_n' + str(npoints) + '.csv')
+    #     print(conj_df.to_markdown())
 
-    knns1_df = pd.DataFrame(data=np.transpose(knns_diffs[:, :, 0]), index=[str(k) for k in kv],
-                            columns=[f_label(r) for r in rotations])
-    knns1_df.to_csv(out_dir + base_name + '_knn1' + '_n' + str(npoints) + '.csv')
-    knns2_df = pd.DataFrame(data=np.transpose(knns_diffs[:, :, 1]), index=[str(k) for k in kv],
-                            columns=[f_label(r) for r in rotations])
-    knns2_df.to_csv(out_dir + base_name + '_knn2' + '_n' + str(npoints) + '.csv')
-    print(knns1_df.to_markdown())
-    print(knns2_df.to_markdown())
+    # knns1_df = pd.DataFrame(data=np.transpose(knns_diffs[:, :, 0]), index=[str(k) for k in kv],
+    #                         columns=[f_label(r) for r in rotations])
+    # knns1_df.to_csv(out_dir + rot_dir + base_name + '_knn1' + '_n' + str(npoints) + '.csv')
+    # knns2_df = pd.DataFrame(data=np.transpose(knns_diffs[:, :, 1]), index=[str(k) for k in kv],
+    #                         columns=[f_label(r) for r in rotations])
+    # knns2_df.to_csv(out_dir + rot_dir + base_name + '_knn2' + '_n' + str(npoints) + '.csv')
+    # print(knns1_df.to_markdown())
+    # print(knns2_df.to_markdown())
 
-    fnns1_df = pd.DataFrame(data=np.transpose(fnns_diffs[:, :, 0]), index=[str(r) for r in rv],
-                            columns=[f_label(r) for r in rotations])
-    fnns1_df.to_csv(out_dir + base_name + '_fnn1' + '_n' + str(npoints) + '.csv')
-    fnns2_df = pd.DataFrame(data=np.transpose(fnns_diffs[:, :, 1]), index=[str(r) for r in rv],
-                            columns=[f_label(r) for r in rotations])
-    fnns2_df.to_csv(out_dir + base_name + '_fnn2' + '_n' + str(npoints) + '.csv')
+    # fnns1_df = pd.DataFrame(data=np.transpose(fnns_diffs[:, :, 0]), index=[str(r) for r in rv],
+    #                         columns=[f_label(r) for r in rotations])
+    # fnns1_df.to_csv(out_dir + rot_dir + base_name + '_fnn1' + '_n' + str(npoints) + '.csv')
+    # fnns2_df = pd.DataFrame(data=np.transpose(fnns_diffs[:, :, 1]), index=[str(r) for r in rv],
+    #                         columns=[f_label(r) for r in rotations])
+    # fnns2_df.to_csv(out_dir + rot_dir + base_name + '_fnn2' + '_n' + str(npoints) + '.csv')
+
+# </editor-fold>
 
 
 ##########################################################
@@ -533,6 +546,7 @@ def experiment_torus():
 ############### Lorenz system experiments ###############
 #########################################################
 
+# <editor-fold desc="Lorenz system">
 def generate_lorenz_data_starting_test(n=5000, starting_points=None, delay=5, emb=True, emb_dim=3):
     if starting_points is None:
         starting_points = [[1., 1., 1.]]
@@ -733,11 +747,240 @@ def experiment_lorenz_diff_sp_grid():
             neigh_conj_df.to_csv(out_dir + base_name + '_neigh_conj.csv')
             print(neigh_conj_df.to_markdown())
 
+def experiment_lorenz_datasize():
+    dl = 5
+    # nlist = [2500, 5000]
+    # nlist = [2500, 5000, 10000, 20000, 40000]
+    # nlist = [2500, 5000, 10000, 20000, 40000]
+    # nlist = [2500, 5000, 7500, 10000, 12500, 15000, 17500, 20000, 25000, 30000, 35000, 40000]
+    nlist = [2500, 5000, 7500, 10000, 12500, 15000, 20000, 30000, 40000]
+    rv = [2, 3, 5]
+    kv = [10, 30]
+    kv = [10]
+    tv = [10, 20, 40]
+
+    do_knn = 0
+    do_con = 1
+
+    fnn_diffs = np.zeros((len(nlist),  len(rv)))
+    knn_diffs = np.zeros((len(nlist),  len(kv)))
+    conj_diffs = np.zeros((len(nlist),  len(kv),  len(tv)))
+    neigh_conj_diffs = np.zeros((len(nlist),  len(kv),  len(tv)))
+
+    static_data = generate_lorenz_data_embeddings_test(n=10000,
+                                                starting_points=([[1., 1., 1.]]),
+                                                delay=dl,
+                                                dims=[2, 3, 4],
+                                                axis=[0])
+    skeys = [k for k in static_data.keys()]
+    sk2 = skeys[2]
+    sts2 = static_data[sk2]
+
+    base_name = lor_dir + 'lorenz_datasize_test_3_vs_4_static1'
+    for inv, nv in enumerate(nlist):
+        data = generate_lorenz_data_embeddings_test(n=nv,
+                                                    starting_points=([[1., 1., 1.]]),
+                                                    delay=dl,
+                                                    dims=[3, 4],
+                                                    # dims=[2, 3],
+                                                    axis=[0])
+        homeo = embedding_homeomorphisms(static_data, 'lorenz', dl=dl)
+
+        keys = [k for k in data.keys()]
+        k1 = keys[1]
+        ts1 = data[k1]
+        k2 = keys[2]
+        ts2 = data[k2]
+
+        print(k1, k2)
+        new_n = min(len(ts1), len(ts2))
+        k1 = sk2
+        ts1 = sts2
+
+        print(base_name)
+
+        if do_knn:
+            knn1, _ = dy.conjugacy_test_knn(ts1[:new_n], ts2[:new_n], k=kv, dist_fun='max')
+            knn_diffs[inv, :] = knn1
+
+            fnn1, _ = dy.fnn(ts1[:new_n], ts2[:new_n], r=rv, dist_fun='max')
+            fnn_diffs[inv, :] = fnn1
+
+        # if do_conj and k1[1] != k2[1]:
+        if do_con:
+            # conj_diffs[inv, :, :] = dy.conjugacy_test(ts1[:new_n], ts2[:new_n], homeo(k1, k2, ts1, ts2), k=kv,
+            #                                                    t=tv, dist_fun='max')
+            neigh_conj_diffs[inv, :, :] = dy.neigh_conjugacy_test(ts1, ts2, homeo(k1, k2, ts1, ts2), k=kv,
+                                                                  t=tv, dist_fun='max')
+            # neigh_conj_diffs[inv, :, :] = dy.neigh_conjugacy_test(ts1[:new_n], ts2[:new_n], homeo(k1, k2, ts1, ts2), k=kv,
+            #                                                t=tv, dist_fun='max')
+
+    if do_knn:
+        fnn_df = pd.DataFrame(data=fnn_diffs, index=[str(nv) for nv in nlist], columns=[str(r) for r in rv])
+        fnn_df.to_csv(out_dir + base_name + '_fnn.csv')
+        knn_df = pd.DataFrame(data=knn_diffs, index=[str(nv) for nv in nlist], columns=[str(k) for k in kv])
+        knn_df.to_csv(out_dir + base_name + '_knn.csv')
+
+    if do_con:
+        for it, t in enumerate(tv):
+            # conj_df = pd.DataFrame(data=conj_diffs[:, :, it], index=[str(nv) for nv in nlist],
+            #                              columns=[str(k) for k in kv])
+            # conj_df.to_csv(out_dir + base_name + '_conj_t' + str(t) + '.csv')
+            # print(conj_df.to_markdown())
+            neigh_conj_df = pd.DataFrame(data=neigh_conj_diffs[:, :, it], index=[str(nv) for nv in nlist],
+                                         columns=[str(k) for k in kv])
+            neigh_conj_df.to_csv(out_dir + base_name + '_neigh_conj_t' + str(t) + '.csv')
+            print(neigh_conj_df.to_markdown())
+
+def experiment_lorenz_diff_tgrid_datasize():
+    dl = 5
+    tv = list(np.arange(1, 12, 3)) + list(np.arange(15, 26, 5)) + list(np.arange(30, 101, 10))
+    nlist = [2500, 5000, 10000, 20000, 40000]
+    nlist = [2500, 5000, 10000, 20000, 40000]
+    kv = [5]
+    conj_diffs = np.zeros((len(nlist),  len(tv)))
+    neigh_conj_diffs = np.zeros((len(nlist),  len(tv)))
+
+    base_name = lor_dir + 'lorenz_datasize_grid'
+    for inv, nv in enumerate(nlist):
+        data = generate_lorenz_data_starting_test(n=nv,
+                                                  starting_points=np.array([[1., 1., 1.], [1., 2., 1.]]),
+                                                  # starting_points=np.array([[1., 1., 1.], [1., 2., 1.], [2., 1., 1.], [1., 1., 2.]]),
+                                                  delay=dl,
+                                                  emb_dim=3)
+        homeo = embedding_homeomorphisms(data, 'lorenz', dl=dl)
+
+        keys = [k for k in data.keys()]
+        k2 = keys[0]
+        ts2 = data[k2]
+
+        for j in range(2, len(keys)):
+            k1 = keys[j]
+            ts1 = data[k1]
+            if k1[0] != 'emb':
+                continue
+            #     base_name = lor_dir + 'lorenz_datasize_grid_' \
+            #                 + k1[0] + str(k1[2]) + str(k1[3]) + '_vs_' + k2[0] + str(k2[1]) \
+            #                 + '_nv' + str(nv)
+            # else:
+            #     continue
+
+            print(k1, k2)
+            # ts2 = data[k2]
+            new_n = min(len(ts1), len(ts2))
+
+            print(base_name)
+            # conj_diffs[j - 1, :, :] = dy.conjugacy_test(ts1[:new_n], ts2[:new_n], homeo(k1, k2, ts1, ts2), k=kv, t=tv,
+            #                                             dist_fun='max')
+            # conj_df = pd.DataFrame(data=conj_diffs[j - 1, :, :], index=[str(k) for k in kv], columns=[str(t) for t in tv])
+            # conj_df.to_csv(out_dir + base_name + '_conj.csv')
+            # print(conj_df.to_markdown())
+
+            neigh_conj_diffs[inv, :] = dy.neigh_conjugacy_test(ts1[:new_n], ts2[:new_n], homeo(k1, k2, ts1, ts2), k=kv,
+                                                                    t=tv, dist_fun='max')
+
+    neigh_conj_df = pd.DataFrame(data=neigh_conj_diffs, index=[str(nv) for nv in nlist],
+                                 columns=[str(t) for t in tv])
+    neigh_conj_df.to_csv(out_dir + base_name + '_neigh_conj.csv')
+    print(neigh_conj_df.to_markdown())
+
+def experiment_lorenz_embedding():
+    base_name = lor_dir + 'lorenz_dim_embedding'
+    do_fnn = 1
+    do_knn = 1
+    do_conj = 1
+
+    dl = 5
+    tv = list(np.arange(1, 21, 4)) + list(np.arange(25, 81, 5))
+    kv = list(np.arange(1, 21, 1)) + list(np.arange(25, 61, 5))
+    rv = list(np.arange(1, 21, 1))
+    dimsv = [1, 2, 3, 4, 5, 6]
+    fnn_diffs = np.zeros((len(dimsv)-1, 2, len(rv)))
+    knn_diffs = np.zeros((len(dimsv)-1, 2, len(kv)))
+    neigh_conj_diffs_k = np.zeros((len(dimsv)-1, 2, len(kv)))
+    neigh_conj_diffs_t = np.zeros((len(dimsv)-1, 2, len(tv)))
+
+    data = generate_lorenz_data_embeddings_test(n=10000,
+                                              starting_points=np.array([[1., 1., 1.]]),
+                                              delay=dl,
+                                              dims=dimsv,
+                                              axis=[0])
+    homeo = embedding_homeomorphisms(data, 'lorenz', dl=dl)
+    keys = [k for k in data.keys()]
+    labels = [str(k) for k in keys]
+    print(data.keys())
+
+    pairs = [(i, i+1) for i in dimsv[:-1]]
+    for (i, j) in pairs:
+        k1 = keys[i]
+        k2 = keys[j]
+        print(k1, ' vs. ', k2)
+        if len(data[k1].shape) == 1:
+            ts1 = data[k1].reshape((len(data[k1]), 1))
+        else:
+            ts1 = data[k1]
+        if len(data[k2].shape) == 1:
+            ts2 = data[k2].reshape((len(data[k2]), 1))
+        else:
+            ts2 = data[k2]
+        new_n = min(len(ts1), len(ts2))
+        if do_fnn:
+            fnn1, fnn2 = dy.fnn(ts1[:new_n], ts2[:new_n], r=rv, dist_fun='max')
+            fnn_diffs[i-1, 0, :] = fnn1
+            fnn_diffs[i-1, 1, :] = fnn2
+        if do_knn:
+            knn1, knn2 = dy.conjugacy_test_knn(ts1[:new_n], ts2[:new_n], k=kv, dist_fun='max')
+            knn_diffs[i-1, 0, :] = knn1
+            knn_diffs[i-1, 1, :] = knn2
+        if do_conj:
+            tsA = ts1[:new_n]
+            tsB = ts2[:new_n]
+            neigh_conj_diffs_t[i-1, 0, :] = dy.neigh_conjugacy_test(tsA, tsB, homeo(k1, k2, ts1, ts2), k=[5], t=tv,
+                                                                    dist_fun='max')
+            neigh_conj_diffs_t[i-1, 1, :] = dy.neigh_conjugacy_test(tsB, tsA, homeo(k2, k1, ts2, ts1), k=[5], t=tv,
+                                                                    dist_fun='max')
+            neigh_conj_diffs_k[i-1, 0, :] = dy.neigh_conjugacy_test(tsA, tsB, homeo(k1, k2, ts1, ts2), k=kv, t=[10],
+                                                                   dist_fun='max')[:, 0]
+            neigh_conj_diffs_k[i-1, 1, :] = dy.neigh_conjugacy_test(tsB, tsA, homeo(k2, k1, ts2, ts1), k=kv, t=[10],
+                                                                    dist_fun='max')[:, 0]
+
+    if do_fnn:
+        fnn_df = pd.DataFrame(data=fnn_diffs[:, 0, :], index=[str(i) for i in dimsv[:-1]], columns=[str(r) for r in rv])
+        fnn_df.to_csv(out_dir + base_name + '_fnn_dir0' + '.csv')
+        print(fnn_df.to_markdown())
+        fnn_df = pd.DataFrame(data=fnn_diffs[:, 1, :], index=[str(i) for i in dimsv[:-1]], columns=[str(r) for r in rv])
+        fnn_df.to_csv(out_dir + base_name + '_fnn_dir1' + '.csv')
+        print(fnn_df.to_markdown())
+    if do_knn:
+        knn_df = pd.DataFrame(data=knn_diffs[:, 0, :], index=[str(i) for i in dimsv[:-1]], columns=[str(k) for k in kv])
+        knn_df.to_csv(out_dir + base_name + '_knn_dir0' + '.csv')
+        print(knn_df.to_markdown())
+        knn_df = pd.DataFrame(data=knn_diffs[:, 1, :], index=[str(i) for i in dimsv[:-1]], columns=[str(k) for k in kv])
+        knn_df.to_csv(out_dir + base_name + '_knn_dir1' + '.csv')
+        print(knn_df.to_markdown())
+    if do_conj:
+        conj_df = pd.DataFrame(data=neigh_conj_diffs_k[:, 0, :], index=[str(i) for i in dimsv[:-1]], columns=[str(k) for k in kv])
+        conj_df.to_csv(out_dir + base_name + '_conj_k_dir0' + '.csv')
+        print(conj_df.to_markdown())
+        conj_df = pd.DataFrame(data=neigh_conj_diffs_k[:, 1, :], index=[str(i) for i in dimsv[:-1]], columns=[str(k) for k in kv])
+        conj_df.to_csv(out_dir + base_name + '_conj_k_dir1' + '.csv')
+        print(conj_df.to_markdown())
+        conj_df = pd.DataFrame(data=neigh_conj_diffs_t[:, 0, :], index=[str(i) for i in dimsv[:-1]], columns=[str(t) for t in tv])
+        conj_df.to_csv(out_dir + base_name + '_conj_t_dir0' + '.csv')
+        print(conj_df.to_markdown())
+        conj_df = pd.DataFrame(data=neigh_conj_diffs_t[:, 1, :], index=[str(i) for i in dimsv[:-1]], columns=[str(t) for t in tv])
+        conj_df.to_csv(out_dir + base_name + '_conj_t_dir1' + '.csv')
+        print(conj_df.to_markdown())
+
+
+
+# </editor-fold>
 
 ##########################################################
 ############### Klein rotation experiments ###############
 ##########################################################
 
+# <editor-fold desc="Klein rotation">
 def generate_klein_rotation_data_test(n=2000, starting_points=None, rotations=None, delay=8, dims=None):
     """
     @param n:
@@ -775,7 +1018,7 @@ def generate_klein_rotation_data_test(n=2000, starting_points=None, rotations=No
                               kp * cos0 * (1 + ke * sin1),
                               kp * sin0 * (1 + ke * sin1)]).transpose().reshape((len(tor), 4))
             shifted_klein = np.dot(A, klein.transpose()).transpose()
-            data[('klein', f_label(sp), f_label(rot[0]), f_label(rot[1]))] = klein
+            data[('klein', f_label(sp), f_label(rot[0]), f_label(rot[1]))] = shifted_klein
             for d in dims:
                 emb = dy.embedding(shifted_klein[:, 0].reshape((n,)), d, delay)
                 data[('emb', 0, d, f_label(sp), f_label(rot[0]), f_label(rot[1]))] = emb
@@ -845,10 +1088,105 @@ def experiment_klein_diff_sp_grid():
             neigh_conj_df.to_csv(out_dir + base_name + '_neigh_conj.csv')
             print(neigh_conj_df.to_markdown())
 
+
+def experiment_klein_embedding():
+    base_name = kle_dir + 'klein_dim_embedding'
+    do_fnn = 0
+    do_knn = 0
+    do_conj = 1
+
+    dl = 8
+    tv = list(np.arange(1, 21, 4)) + list(np.arange(25, 51, 5))
+    kv = list(np.arange(1, 21, 1)) + list(np.arange(25, 51, 5))
+    rv = list(np.arange(1, 21, 1))
+    dimsv = [1, 2, 3, 4, 5, 6, 7, 8]
+    fnn_diffs = np.zeros((len(dimsv)-1, 2, len(rv)))
+    knn_diffs = np.zeros((len(dimsv)-1, 2, len(kv)))
+    neigh_conj_diffs_k = np.zeros((len(dimsv)-1, 2, len(kv)))
+    neigh_conj_diffs_t = np.zeros((len(dimsv)-1, 2, len(tv)))
+
+    rotations = np.array([[np.sqrt(2) / 10., (np.sqrt(3)) / 10.]])
+    data = generate_klein_rotation_data_test(n=8000,
+                                            rotations=rotations,
+                                            starting_points=np.array([[0., 0.]]),
+                                            delay=dl,
+                                            dims=dimsv)
+
+    homeo = embedding_homeomorphisms(data, 'klein', dl=dl)
+
+    keys = [k for k in data.keys()]
+    labels = [str(k) for k in keys]
+    print(data.keys())
+
+    pairs = [(i, i+1) for i in dimsv[:-1]]
+    for (i, j) in pairs:
+        k1 = keys[i]
+        k2 = keys[j]
+        print(k1, ' vs. ', k2)
+        if len(data[k1].shape) == 1:
+            ts1 = data[k1].reshape((len(data[k1]), 1))
+        else:
+            ts1 = data[k1]
+        if len(data[k2].shape) == 1:
+            ts2 = data[k2].reshape((len(data[k2]), 1))
+        else:
+            ts2 = data[k2]
+        new_n = min(len(ts1), len(ts2))
+        if do_fnn:
+            fnn1, fnn2 = dy.fnn(ts1[:new_n], ts2[:new_n], r=rv, dist_fun='max')
+            fnn_diffs[i-1, 0, :] = fnn1
+            fnn_diffs[i-1, 1, :] = fnn2
+        if do_knn:
+            knn1, knn2 = dy.conjugacy_test_knn(ts1[:new_n], ts2[:new_n], k=kv, dist_fun='max')
+            knn_diffs[i-1, 0, :] = knn1
+            knn_diffs[i-1, 1, :] = knn2
+        if do_conj:
+            tsA = ts1[:new_n]
+            tsB = ts2[:new_n]
+            neigh_conj_diffs_t[i-1, 0, :] = dy.neigh_conjugacy_test(tsA, tsB, homeo(k1, k2, ts1, ts2), k=[5], t=tv,
+                                                                    dist_fun='max')
+            # neigh_conj_diffs_t[i-1, 1, :] = dy.neigh_conjugacy_test(tsB, tsA, homeo(k2, k1, ts2, ts1), k=[5], t=tv,
+            #                                                         dist_fun='max')
+            neigh_conj_diffs_k[i-1, 0, :] = dy.neigh_conjugacy_test(tsA, tsB, homeo(k1, k2, ts1, ts2), k=kv, t=[10],
+                                                                    dist_fun='max')[:, 0]
+            # neigh_conj_diffs_k[i-1, 1, :] = dy.neigh_conjugacy_test(tsB, tsA, homeo(k2, k1, ts2, ts1), k=kv, t=[10],
+            #                                                         dist_fun='max')[:, 0]
+
+    if do_fnn:
+        fnn_df = pd.DataFrame(data=fnn_diffs[:, 0, :], index=[str(i) for i in dimsv[:-1]], columns=[str(r) for r in rv])
+        fnn_df.to_csv(out_dir + base_name + '_fnn_dir0' + '.csv')
+        print(fnn_df.to_markdown())
+        fnn_df = pd.DataFrame(data=fnn_diffs[:, 1, :], index=[str(i) for i in dimsv[:-1]], columns=[str(r) for r in rv])
+        fnn_df.to_csv(out_dir + base_name + '_fnn_dir1' + '.csv')
+        print(fnn_df.to_markdown())
+    if do_knn:
+        knn_df = pd.DataFrame(data=knn_diffs[:, 0, :], index=[str(i) for i in dimsv[:-1]], columns=[str(k) for k in kv])
+        knn_df.to_csv(out_dir + base_name + '_knn_dir0' + '.csv')
+        print(knn_df.to_markdown())
+        knn_df = pd.DataFrame(data=knn_diffs[:, 1, :], index=[str(i) for i in dimsv[:-1]], columns=[str(k) for k in kv])
+        knn_df.to_csv(out_dir + base_name + '_knn_dir1' + '.csv')
+        print(knn_df.to_markdown())
+    if do_conj:
+        conj_df = pd.DataFrame(data=neigh_conj_diffs_k[:, 0, :], index=[str(i) for i in dimsv[:-1]], columns=[str(k) for k in kv])
+        conj_df.to_csv(out_dir + base_name + '_conj_k_dir0' + '.csv')
+        print(conj_df.to_markdown())
+        conj_df = pd.DataFrame(data=neigh_conj_diffs_k[:, 1, :], index=[str(i) for i in dimsv[:-1]], columns=[str(k) for k in kv])
+        conj_df.to_csv(out_dir + base_name + '_conj_k_dir1' + '.csv')
+        print(conj_df.to_markdown())
+        conj_df = pd.DataFrame(data=neigh_conj_diffs_t[:, 0, :], index=[str(i) for i in dimsv[:-1]], columns=[str(t) for t in tv])
+        conj_df.to_csv(out_dir + base_name + '_conj_t_dir0' + '.csv')
+        print(conj_df.to_markdown())
+        conj_df = pd.DataFrame(data=neigh_conj_diffs_t[:, 1, :], index=[str(i) for i in dimsv[:-1]], columns=[str(t) for t in tv])
+        conj_df.to_csv(out_dir + base_name + '_conj_t_dir1' + '.csv')
+        print(conj_df.to_markdown())
+
+# </editor-fold>
+
 #########################################################
 ############### Dadras system experiments ###############
 #########################################################
 
+# <editor-fold descr="Dadras system">
 def dadras_homeomorphisms(data, dl=5):
     # get original dadrases as a refference sequences
     dadrases = {}
@@ -948,6 +1286,8 @@ def experiment_dadras():
         experiment(data, dad_dir + base_name + '_n' + str(n), kv, tv, rv, False, True,
                    embedding_homeomorphisms(data, 'dadras', dl=dl, emb_ts='emb'), pairs=pairs,
                    dist_fun='max')
+
+# </editor-fold>
 
 ###############################################
 ############### General methods ###############
@@ -1050,10 +1390,15 @@ if __name__ == '__main__':
 
     # experiment_torus()
 
-    experiment_lorenz(0)
+    # experiment_lorenz(0)
     # experiment_lorenz_diff_sp_grid()
+    # experiment_lorenz_diff_tgrid_datasize()
+    # experiment_lorenz_embedding()
+    experiment_lorenz_datasize()
 
     # experiment_klein_diff_sp_grid()
+    # experiment_klein_embedding()
+
     # experiment_dadras()
 
     # points = np.array([[1., 0.], [0., 1.], [-1., 0.], [0, -1.]])

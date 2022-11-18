@@ -32,7 +32,7 @@ print("EN done")
 
 # fig = plt.figure(figsize=(15,10))
 # fig = plt.figure()
-fig = plt.figure(figsize=(18, 12))
+fig = plt.figure(figsize=(22, 12))
 rows = 1
 cols = 2
 
@@ -54,6 +54,7 @@ ax = plt.subplot(rows, cols, 2)
 anc = AlphaNerveComplex(lms, eps, 2, points=points, patching=False, record_witnesses=True)
 draw_complex(anc, fig=fig, ax=ax, vlabels=True)
 non_witnesses = np.array([points[i, :] for i in anc.non_witnesses[2]])
+print(anc.not_witnessed[2])
 ax.scatter(non_witnesses[:, 0], non_witnesses[:, 1], color='k', s = 0.5)
 plt.show()
 
@@ -67,10 +68,21 @@ points_dists = cdist(points, lms, 'euclidean')
 # draw_complex(anc, fig=fig, ax=ax, vlabels=True)
 edge_wareas = dict()
 edge_witnesses = dict()
-verts = [3, 8, 37, 47]
-limits = [[0, 0.28], [0.4, 0.65]]
+verts = [4, 33, 44, 57]
+# verts = [22, 23, 60, 67]
+# limits = [[0.7, 1.], [0.6, 0.9]]
+# verts = [3, 8, 37, 47]
+# limits = [[0, 0.28], [0.4, 0.65]]
 # verts = [5, 25, 51, 54]
 # limits = [[0.18, 0.4], [0.07, 0.3]]
+
+vcoords = np.array([lms[i] for i in verts])
+def get_limits(vertices, offset):
+    xmin, xmax, ymin, ymax = np.min(vcoords[:, 0]), np.max(vcoords[:,0]), np.min(vcoords[:,1]), np.max(vcoords[:, 1])
+    xspan, yspan = xmax-xmin, ymax-ymin
+    return [[xmin - xspan*offset, xmax + xspan*offset], [ymin - yspan*offset, ymax + yspan*offset]]
+limits = get_limits(vcoords, 0.2)
+
 for edge in combinations(verts, 2):
     edge_wareas[tuple(np.sort(edge))] = []
     edge_witnesses[tuple(np.sort(edge))] = []
@@ -108,10 +120,11 @@ plt.xlim(limits[0])
 plt.ylim(limits[1])
 plt.show()
 
-# ax = plt.subplot(rows, cols, 4)
-# anc2 = AlphaNerveComplex(lms, eps, 2, points=points)
-# draw_complex(anc2, fig=fig, ax=ax)
-# plt.show()
+fig = plt.figure()
+ax = plt.subplot()
+anc2 = AlphaNerveComplex(lms, eps, 2, points=points)
+draw_complex(anc2, fig=fig, ax=ax)
+plt.show()
 
 
 # ax = plt.subplot(rows, cols, 3)

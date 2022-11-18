@@ -48,16 +48,16 @@ def draw_transition_graph(trans_mat, vert_coords, threshold=1.0, node_size=50, e
     return ax
 
 
-def draw_complex(complex, fig=None, ax=None, circles=False, col='blue', alpha=0.4, vlabels=False):
+def draw_complex(complex, fig=None, ax=None, circles=False, dim=None, col='blue', alpha=0.4, vlabels=False):
     if fig == None or ax == None:
         fig = plt.figure(figsize=(10, 8))
-        if complex.dimension > 2:
+        if dim == 3 or complex.dimension > 2:
             ax = fig.add_subplot(projection='3d')
             ax.set_box_aspect((1.0, 1.0, 0.25))
         else:
             ax = fig.add_subplot()
 
-    if complex.dimension > 2:
+    if dim == 3 or complex.dimension > 2:
         vertices = np.array([complex.coordinates[v[0]] for v in complex.simplices[0]])
         # print(vertices)
         ax.scatter(vertices[:, 0], vertices[:, 1], vertices[:, 2], c=col, s=30)
@@ -77,7 +77,7 @@ def draw_complex(complex, fig=None, ax=None, circles=False, col='blue', alpha=0.
 
         if vlabels:
             for v in complex.simplices[0]:
-                ax.annotate(str(v[0]), (complex.coordinates[v[0], 0], complex.coordinates[v[0], 1]))
+                ax.annotate(str(v[0]), (complex.coordinates[v[0], 0], complex.coordinates[v[0], 1]), fontsize=15)
 
         for edge in complex.simplices[1]:
             verts = complex.coordinates[list(edge), :]

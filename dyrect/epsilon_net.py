@@ -308,13 +308,16 @@ class AlphaNerveComplex(NerveComplex):
 
         if record_witnesses:
             self.non_witnesses = {0: [], 1: [], 2: []}
+            self.not_witnessed = {0: [], 1: [], 2: []}
             # print(self._simplices[2])
             for x_arg_sorted, x in zip(np.argsort(distances, axis=1), range(num_of_points)):
                 for d in range(self.dimension+1):
                     witnessed_simplex = tuple(np.sort(x_arg_sorted[:d+1]))
-                    print(witnessed_simplex)
+                    # print(witnessed_simplex)
                     if witnessed_simplex not in self._simplices[d]:
                         self.non_witnesses[d].append(x)
+                        if witnessed_simplex not in self.not_witnessed[d]:
+                            self.not_witnessed[d].append(witnessed_simplex)
             # print(self.non_witnesses[2])
 
         ### PATCHING
