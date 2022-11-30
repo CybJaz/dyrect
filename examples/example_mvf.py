@@ -298,7 +298,7 @@ def mvf_on_torus():
     ax.scatter(points[:, 0], points[:, 1], points[:, 2], s=0.01)
     # dy.draw_complex(nc, fig=fig, ax=ax)
 
-    nc = dy.AlphaNerveComplex(lms, eps, 2, points=points)
+    nc = dy.PatchedWitnessComplex(lms, eps, 2, points=points)
     print([len(s) for s in nc.simplices.values()])
     # print(nc.betti_numbers)
     print(nc.coordinates[0])
@@ -410,7 +410,7 @@ def mvf_from_sampled_system():
     EN = dy.EpsilonNet(eps, 0)
     EN.fit(all_points)
     lms = EN.landmarks
-    nc = dy.AlphaNerveComplex(lms, eps, 2, points=all_points)
+    nc = dy.PatchedWitnessComplex(lms, eps, 2, points=all_points)
     # nc = dy.NerveComplex(lms, eps, 2, points=all_points)
 
     fig = plt.figure()

@@ -8,6 +8,12 @@ from scipy.spatial.distance import cdist
 
 from .poset import Poset
 from itertools import chain, combinations
+import functools
+
+def powerset(iterable):
+    "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
+    s = list(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
 
 class EpsilonNet:
     def __init__(self, eps, max_num_of_landmarks=0, dist=True, method='weighted_furthest'):
@@ -223,6 +229,17 @@ class NerveComplex(Complex):
 
     @property
     def betti_numbers(self):
+        if self._st is None:
+            self._st = SimplexTree()
+            max_d = -1
+            for dsimplices in self._simplices.values():
+                for s in dsimplices:
+                    self._st.insert(list(s))
+                    if len(s) > max_d:
+                        max_d = len(s)
+            self._st.set_dimension(max_d)
+            self._st.compute_persistence()
+
         return self._st.betti_numbers()
 
     # @property
@@ -242,17 +259,18 @@ class NerveComplex(Complex):
         return self._eps
 
 
-class AlphaNerveComplex(NerveComplex):
-    def __init__(self, lms, eps, max_dim=-1, points=[], patching=True, record_witnesses=False):
+class PatchedWitnessComplex(NerveComplex):
+    def __init__(self, lms, eps, max_dim=-1, points=[], patching=True,
+                 patching_level=1, patched_dimensions=[2], record_witnesses=False):
         """
-        :param lms:
+        :param lms: landmarks
         :param eps:
         :param max_dim:
         :param points:
         """
         # NerveComplex.__init__(self, lms, eps, max_dim, points=points)
 
-        self._st = SimplexTree()
+        self._st = None
         self._simplices = dict()
         self._coordinates = lms
         self._eps = eps
@@ -267,11 +285,12 @@ class AlphaNerveComplex(NerveComplex):
         # distances from points to landmarks
         distances = cdist(points, lms, 'euclidean')
 
-        # for each point get a sorted (increasing) list of landmarks no further than epsilon times coefficient
+        # for each point get sorted (increasing, by the distance) list of landmarks no further than
+        # epsilon times coefficient
         eps_lms = []
         for x_arg_sorted, x in zip(np.argsort(distances, axis=1), range(num_of_points)):
             i = 0
-            while distances[x, x_arg_sorted[i]] < eps * 2.3:
+            while distances[x, x_arg_sorted[i]] < eps * 2.5:
                 i += 1
             eps_lms.append(x_arg_sorted[:i])
 
@@ -285,6 +304,8 @@ class AlphaNerveComplex(NerveComplex):
             if new_simplex not in self._simplices[0]:
                 self._simplices[0].append(new_simplex)
 
+        self._unproductive_witnesses = {0: [], 1: [], 2: [], 3: []}
+
         # 1 to d-dimension;
         # for dimension 2 - add a 2-simplex (a,b) if there exists a point x such that the list of
         #   the closest landmarks starts either with (a,b,...) or (b,a,...)
@@ -293,7 +314,7 @@ class AlphaNerveComplex(NerveComplex):
         #   and all faces of (a,b,c) are already in the complex
         for d in range(1, self.dimension + 1):
             # print("Dimension: ", d)
-            for x_eps_lms in eps_lms:
+            for x, x_eps_lms in enumerate(eps_lms):
                 if len(x_eps_lms) >= d+1:
                     new_simplex = tuple(np.sort(x_eps_lms[:d+1]))
                     # check if all boundary elements are already present
@@ -301,14 +322,15 @@ class AlphaNerveComplex(NerveComplex):
                     for b in range(d+1):
                         boundary_simplex = new_simplex[:b] + new_simplex[b+1:]
                         if boundary_simplex not in self._simplices[d-1]:
+                            self._unproductive_witnesses[d].append(x)
                             bdQ = False
                             break
                     if bdQ and (new_simplex not in self._simplices[d]):
                         self._simplices[d].append(new_simplex)
 
         if record_witnesses:
-            self.non_witnesses = {0: [], 1: [], 2: []}
-            self.not_witnessed = {0: [], 1: [], 2: []}
+            self.non_witnesses = {0: [], 1: [], 2: [], 3:[]}
+            self.not_witnessed = {0: [], 1: [], 2: [], 3:[]}
             # print(self._simplices[2])
             for x_arg_sorted, x in zip(np.argsort(distances, axis=1), range(num_of_points)):
                 for d in range(self.dimension+1):
@@ -320,72 +342,237 @@ class AlphaNerveComplex(NerveComplex):
                             self.not_witnessed[d].append(witnessed_simplex)
             # print(self.non_witnesses[2])
 
-        ### PATCHING
+        ##### SURFACE PATCHING #####
         if patching:
-            # d+1 dimension
-            extra_simplices = []
-            for x_eps_lms in eps_lms:
-                if len(x_eps_lms) >= self.dimension + 2:
-                    new_simplex = tuple(np.sort(x_eps_lms[:self.dimension + 2]))
-                    if new_simplex in extra_simplices:
-                        continue
-                    # # check if all boundary elements are already present
-                    # bdQ = True
-                    # for b in range(d + 1):
-                    #     boundary_simplex = new_simplex[:b] + new_simplex[b + 1:]
-                    #     if boundary_simplex not in self._simplices[d - 1]:
-                    #         bdQ = False
-                    #         break
-                    # if bdQ and (new_simplex not in self._simplices[d]):
-                    #     self._simplices[d].append(new_simplex)
+            # ### Patched dimension
+            # pd = 2
+            for pd in patched_dimensions:
+                ### Co-dimension of the patching simplex
+                for cdp in range(1, patching_level + 1):
+                    # cdp = 1
+                    ### Number of vertices of the patching simplex
+                    nvp = pd + cdp + 1
 
-                    # 3-d case
-                    bdQ = True
-                    count_codim2 = dict()
-                    for s in combinations(new_simplex, self.dimension-1):
-                        count_codim2[s] = 0
-
-                    for boundary_simplex in combinations(new_simplex, self.dimension):
-                        if boundary_simplex in self.simplices[self.dimension-1]:
-                            for bbs in combinations(boundary_simplex, self.dimension-1):
-                                count_codim2[bbs] += 1
-                    if all([x == 2 for x in count_codim2.values()]):
-                        extra_simplices.append(tuple(new_simplex))
-                        # find two the most distant vertices:
-                        v_coords = np.array([self.coordinates[i] for i in new_simplex])
-
-                        v_max = []
-                        max_dist = -1
-                        min_dist = 10000000.
-                        for (v1, v2) in combinations(new_simplex, 2):
-                            if v1==v2 or (v1, v2) in self._simplices[1] or (v2, v1) in self._simplices[1]:
+                    extra_simplices = []
+                    for x in self._unproductive_witnesses[pd]:
+                        if len(eps_lms[x]) >= nvp:
+                            new_simplex = tuple(np.sort(eps_lms[x][:nvp]))
+                            if new_simplex in extra_simplices:
                                 continue
-                            new_dist = np.linalg.norm(self.coordinates[v1]-self.coordinates[v2])
-                            if new_dist > max_dist:
-                                max_dist = new_dist
-                                v_max = [v1, v2]
-                            # if new_dist < min_dist:
-                            #     min_dist = new_dist
-                            #     v_max = [v1, v2]
-                        # print(v_max)
-                        # v_dists = cdist(v_coords, v_coords)
-                        # v_max = np.unravel_index(np.argmax(v_dists), v_dists.shape)
-                        # dividing simplex
-                        div_simplex = list(set(new_simplex).difference(v_max))
-                        comp_simplex_1 = list(set(new_simplex).difference([v_max[0]]))
-                        comp_simplex_2 = list(set(new_simplex).difference([v_max[1]]))
-                        div_simplex.sort()
-                        comp_simplex_1.sort()
-                        comp_simplex_2.sort()
-                        self._simplices[self.dimension-1].append(tuple(div_simplex))
-                        self._simplices[self.dimension].append(tuple(comp_simplex_1))
-                        self._simplices[self.dimension].append(tuple(comp_simplex_2))
 
-                        # print(div_simplex, comp_simplex_1, comp_simplex_2)
-                        # print(v_dists)
-                        # print(v_max)
+                            ### Check if a new simplex fills a simple hole
+                            bdQ = True
+                            for boundary_simplex in combinations(new_simplex, pd + 1):
+                                if boundary_simplex in self.simplices[pd]:
+                                    bdQ = False
+                                    break
+                            if not bdQ:
+                                continue
+                            # print(new_simplex, bdQ)
 
-                        # print(count_codim2)
+                            ### count simplices of dimension pd-2 in the boundary of the patching simplex
+                            count_bds = dict()
+                            ### simplices of dimension pd-1
+                            boundary = list()
+                            ### new_simplex is of length nvp
+                            for s in combinations(new_simplex, pd-1):
+                                count_bds[s] = 0
+
+                            for boundary_simplex in combinations(new_simplex, pd):
+                                if boundary_simplex in self.simplices[pd-1]:
+                                    boundary.append(boundary_simplex)
+                                    for bbs in combinations(boundary_simplex, pd-1):
+                                        count_bds[bbs] += 1
+
+                            ### If it does, do the patching
+                            if all([b == 2 or b == 0 for b in count_bds.values()]):
+                                extra_simplices.append(tuple(new_simplex))
+
+                                ### MORSE PATCHING
+                                hole_boundary = set()
+                                for s in boundary:
+                                   hole_boundary = hole_boundary.union(set(powerset(s)))
+                                hole_boundary = sorted(list(hole_boundary))
+                                # print(hole_boundary)
+
+                                patch = morse_patching(new_simplex, hole_boundary, self.coordinates)
+                                # print(patch)
+                                for p in patch:
+                                    self._simplices[len(p)-1].append(p)
+
+def patch_poset(simplex, boundary):
+    patch = set(powerset(simplex))
+    bd = set(chain.from_iterable([powerset(s) for s in boundary]))
+    patch = patch.difference(bd)
+    i2s = { i: s for i,s in enumerate(patch)}
+    s2i = { s: i for i,s in enumerate(patch)}
+    poset = Poset(len(i2s))
+    for s in s2i:
+        if len(s) == 1:
+            continue
+        for bs in combinations(s, len(s)-1):
+            if bs in patch:
+                poset.add_relation(s2i[bs], s2i[s])
+    return poset, i2s, s2i
+
+
+def morse_patching(simplex, boundary, verts):
+    poset, i2s, s2i = patch_poset(simplex, boundary)
+
+    i2diams = dict()
+    for i in i2s.keys():
+        i2diams[i] = []
+        for e in combinations(i2s[i], 2):
+            i2diams[i].append(np.linalg.norm(verts[e[0]] - verts[e[1]]))
+        i2diams[i].sort(reverse=True)
+    # print(i2diams)
+
+    def diamcheck(x, y):
+        """ given indices of two simplices x and y, check which:
+            1) has higher dimension
+            2) has longer edges
+        """
+        dx = i2diams[x]
+        dy = i2diams[y]
+        if len(dx) > len(dy):
+            return 1
+        elif len(dx) < len(dy):
+            return -1
+        else:
+            for i in range(len(dx)):
+                if dx[i] > dy[i]:
+                    return 1
+                elif dx[i] < dy[i]:
+                    return -1
+        return 0
+
+    filling = set(range(len(i2s)))
+    #     it = 0
+    while True:
+        old_filling = filling
+        ### sorting of simplices for reduction with respect to:
+        ## #1 method diamcheck
+        sim_queue = sorted(list(filling), key=functools.cmp_to_key(diamcheck), reverse=True)
+        ## #2 without sorting
+        #         sim_queue = filling
+        #     print(sim_queue)
+        for i in sim_queue:
+            up = (poset.above(i)).intersection(filling)
+            #             it += 1
+            if len(up) == 2:
+                filling = filling.difference(up)
+        #                 print([[i2s[s] for s in up]])
+        #### This break makes it slightly faster for small cases but
+        #### introduces more computations with bigger holes (check 'it' counter)
+        #### but without the break the order might be altered
+        #                 break
+
+        if old_filling == filling:
+            # print(True)
+            break
+    #     print(it)
+    return [i2s[s] for s in filling]
+
+# def morse_patching():
+
+
+            #### END FOR
+        # # find two the most distant vertices:
+        # v_coords = np.array([self.coordinates[i] for i in new_simplex])
+
+        #                 v_max = []
+        #                 max_dist = -1
+        #                 min_dist = 10000000.
+        #                 for (v1, v2) in combinations(new_simplex, 2):
+        #                     if v1==v2 or (v1, v2) in self._simplices[1] or (v2, v1) in self._simplices[1]:
+        #                         continue
+        #                     new_dist = np.linalg.norm(self.coordinates[v1]-self.coordinates[v2])
+        #                     if new_dist > max_dist:
+        #                         max_dist = new_dist
+        #                         v_max = [v1, v2]
+        #                     # if new_dist < min_dist:
+        #                     #     min_dist = new_dist
+        #                     #     v_max = [v1, v2]
+        #                 # print(v_max)
+        #                 # v_dists = cdist(v_coords, v_coords)
+        #                 # v_max = np.unravel_index(np.argmax(v_dists), v_dists.shape)
+        #                 # dividing simplex
+        #                 div_simplex = list(set(new_simplex).difference(v_max))
+        #                 comp_simplex_1 = list(set(new_simplex).difference([v_max[0]]))
+        #                 comp_simplex_2 = list(set(new_simplex).difference([v_max[1]]))
+        #                 div_simplex.sort()
+        #                 comp_simplex_1.sort()
+        #                 comp_simplex_2.sort()
+        #                 self._simplices[self.dimension-1].append(tuple(div_simplex))
+        #                 self._simplices[self.dimension].append(tuple(comp_simplex_1))
+        #                 self._simplices[self.dimension].append(tuple(comp_simplex_2))
+
+    # ### PATCHING
+    # if patching:
+    #     # d+1 dimension
+        #     extra_simplices = []
+        #     for x_eps_lms in eps_lms:
+        #         if len(x_eps_lms) >= self.dimension + 2:
+        #             new_simplex = tuple(np.sort(x_eps_lms[:self.dimension + 2]))
+        #             if new_simplex in extra_simplices:
+        #                 continue
+        #             # # check if all boundary elements are already present
+        #             # bdQ = True
+        #             # for b in range(d + 1):
+        #             #     boundary_simplex = new_simplex[:b] + new_simplex[b + 1:]
+        #             #     if boundary_simplex not in self._simplices[d - 1]:
+        #             #         bdQ = False
+        #             #         break
+        #             # if bdQ and (new_simplex not in self._simplices[d]):
+        #             #     self._simplices[d].append(new_simplex)
+        #
+        #             # 3-d case
+        #             bdQ = True
+        #             count_codim2 = dict()
+        #             for s in combinations(new_simplex, self.dimension-1):
+        #                 count_codim2[s] = 0
+        #
+        #             for boundary_simplex in combinations(new_simplex, self.dimension):
+        #                 if boundary_simplex in self.simplices[self.dimension-1]:
+        #                     for bbs in combinations(boundary_simplex, self.dimension-1):
+        #                         count_codim2[bbs] += 1
+        #             if all([x == 2 for x in count_codim2.values()]):
+        #                 extra_simplices.append(tuple(new_simplex))
+        #                 # find two the most distant vertices:
+        #                 v_coords = np.array([self.coordinates[i] for i in new_simplex])
+        #
+        #                 v_max = []
+        #                 max_dist = -1
+        #                 min_dist = 10000000.
+        #                 for (v1, v2) in combinations(new_simplex, 2):
+        #                     if v1==v2 or (v1, v2) in self._simplices[1] or (v2, v1) in self._simplices[1]:
+        #                         continue
+        #                     new_dist = np.linalg.norm(self.coordinates[v1]-self.coordinates[v2])
+        #                     if new_dist > max_dist:
+        #                         max_dist = new_dist
+        #                         v_max = [v1, v2]
+        #                     # if new_dist < min_dist:
+        #                     #     min_dist = new_dist
+        #                     #     v_max = [v1, v2]
+        #                 # print(v_max)
+        #                 # v_dists = cdist(v_coords, v_coords)
+        #                 # v_max = np.unravel_index(np.argmax(v_dists), v_dists.shape)
+        #                 # dividing simplex
+        #                 div_simplex = list(set(new_simplex).difference(v_max))
+        #                 comp_simplex_1 = list(set(new_simplex).difference([v_max[0]]))
+        #                 comp_simplex_2 = list(set(new_simplex).difference([v_max[1]]))
+        #                 div_simplex.sort()
+        #                 comp_simplex_1.sort()
+        #                 comp_simplex_2.sort()
+        #                 self._simplices[self.dimension-1].append(tuple(div_simplex))
+        #                 self._simplices[self.dimension].append(tuple(comp_simplex_1))
+        #                 self._simplices[self.dimension].append(tuple(comp_simplex_2))
+        #
+        #                 # print(div_simplex, comp_simplex_1, comp_simplex_2)
+        #                 # print(v_dists)
+        #                 # print(v_max)
+        #
+        #                 # print(count_codim2)
 
         # for v in self.simplices[0]:
         #     print(v, ' - ', self.coordinates[v[0]])

@@ -69,7 +69,7 @@ def draw_complex(complex, fig=None, ax=None, circles=False, dim=None, col='blue'
         for tr in complex.simplices[2]:
             verts = complex.coordinates[list(tr), :]
             # print(list(verts))
-            t = ax.add_collection3d(Poly3DCollection([verts], color=col, alpha=alpha))
+            t = ax.add_collection3d(Poly3DCollection([verts[:, :3]], color=col, alpha=alpha))
 
     else:
         vertices = np.array([complex.coordinates[v[0]] for v in complex.simplices[0]])

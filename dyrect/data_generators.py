@@ -300,3 +300,17 @@ def unit_circle_sample(npoints, noise=0.0):
     x = np.cos(rpoints) + (np.random.random_sample(npoints) - 0.5) * noise
     y = np.sin(rpoints) + (np.random.random_sample(npoints) - 0.5) * noise
     return np.transpose(np.stack((x, y)))
+
+
+# 3D POINT CLOUDS
+# ###############
+
+def torus_sample(npoints, radius=.35):
+    angles_phi = np.random.random(npoints) * 2 * np.pi
+    angles_theta = np.random.random(npoints) * 2 * np.pi
+
+    torus_points = np.array([[
+        (1 + radius * np.cos(p)) * np.cos(t),
+        (1 + radius * np.cos(p)) * np.sin(t),
+        radius * np.sin(p)] for p, t in zip(angles_phi, angles_theta)])
+    return torus_points

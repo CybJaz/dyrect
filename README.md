@@ -6,6 +6,9 @@
 git clone https://github.com/CybJaz/dyrect.git
 ```
 ### Setup python environment:
+add channel to your conda:
+# ```
+# ```
 go to the dyrect directory and run
 ```
 conda env create -f dyrect_numpy21.yml

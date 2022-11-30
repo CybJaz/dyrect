@@ -178,8 +178,15 @@ def fnn(ts1, ts2, r=None, dist_fun=None):
             v2 = H(std2 / rv - dists2[i, nn2[i]])
             fnn2_num += H(dists1[i, nn2[i]] / dists2[i, nn2[i]] - rv) * v2
             fnn2_div += v2
-        fnns1.append(fnn1_num / fnn1_div)
-        fnns2.append(fnn2_num / fnn2_div)
+
+        if fnn1_div == 0:
+            fnns1.append(np.infty)
+        else:
+            fnns1.append(fnn1_num / fnn1_div)
+        if fnn2_div == 0:
+            fnns2.append(np.infty)
+        else:
+            fnns2.append(fnn2_num / fnn2_div)
 
     return fnns1, fnns2
 
@@ -286,7 +293,7 @@ def conjugacy_test(tsX, tsY, h, k=None, t=None, dist_fun=None):
         for ik, kv in enumerate(k):
             diffs[ik, it] = np.sum(accumulated_hausdorff[(kv, tv)]) / (len(accumulated_hausdorff[(kv, tv)]) * max_distY)
 
-    print(diffs)
+    # print(diffs)
     return diffs
 
 
@@ -380,5 +387,5 @@ def neigh_conjugacy_test(tsX, tsY, h, k=None, t=None, dist_fun=None):
 #    if True:
 #        return diffs, allstats
 #    else:
-    print(diffs)
+#     print(diffs)
     return diffs
