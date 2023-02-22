@@ -66,16 +66,28 @@ class EpsilonNet:
     #     return self._complex
 
 class Complex():
-    def __init__(self, max_dim=-1):
+    def __init__(self, max_dim=-1, ambient_dim=-1):
         self._simplices = dict()
         self._coordinates = None
+        self._st = SimplexTree()
         self._dim = max_dim
+        self._ambient_dim = ambient_dim
+        self._betti_numbers = None
 
     @classmethod
     def construct(cls, simpls, coords=None, max_dim = -1):
         obj = cls.__new__(cls)
+        obj.__init__()
         obj._simplices = simpls
         obj._coordinates = coords
+        for ds in simpls:
+            for s in simpls[ds]:
+                obj._st.insert(s)
+        obj._st.compute_persistence(persistence_dim_max=True)
+        obj._betti_numbers = obj._st.betti_numbers()
+
+        if coords is not None:
+            obj._ambient_dim = coords.shape[0]
         dimension = [k for k in simpls.keys() if len(simpls[k]) == 0]
         if len(dimension) == 0:
             dimension = max(simpls.keys())
@@ -86,6 +98,23 @@ class Complex():
         else:
             obj._dim = min(max_dim, dimension)
         return obj
+
+    def add_simplex(self, simplex):
+        d = len(simplex)-1
+        if d not in self._simplices:
+            self._simplices[d] = []
+            self._dim = d
+        self._simplices[d].append(simplex)
+        self._st.insert(simplex)
+        self._betti_numbers = None
+
+    def merge_complex(self, patch):
+        self._betti_numbers = None
+        for d in patch.simplices:
+            for s in patch.simplices[d]:
+                if s not in self.simplices[d]:
+                    self._simplices[d].append(s)
+                    self._st.insert(s)
 
     @property
     def coordinates(self):
@@ -142,6 +171,52 @@ class Complex():
         baricentric_simplices = poset.order_complex()
         # print(baricentric_simplices)
         return Complex.construct(baricentric_simplices, np.array(baricenters))
+
+    def subcomplex(self, vertices):
+        """
+            Max subcomplex spanned by a set of vertices.
+        """
+        vset = set(vertices)
+
+        sub_simplices = dict()
+        sst = SimplexTree()
+        components = DisjointSet(vset)
+
+        for d in range(self.dimension + 1):
+            sub_simplices[d] = []
+
+        ### TODO: this could be done more efficiently
+        for v in vset:
+            cofaces = [c[0] for c in self._st.get_cofaces([v], 0)]
+            for cof in cofaces:
+                if set(cof).issubset(vertices):
+                    d = len(cof) - 1
+                    if tuple(cof) not in sub_simplices[d]:
+                        sub_simplices[d].append(tuple(cof))
+                        sst.insert(list(cof))
+                    if d == 1:
+                        components.merge(cof[0], cof[1])
+        sst.persistence()
+
+        return Complex.construct(sub_simplices, self.coordinates)
+
+    @property
+    def betti_numbers(self):
+        if self._st is None:
+            self._st = SimplexTree()
+            max_d = -1
+            for dsimplices in self._simplices.values():
+                for s in dsimplices:
+                    self._st.insert(list(s))
+                    if len(s) > max_d:
+                        max_d = len(s)
+            self._st.set_dimension(max_d)
+            self._st.compute_persistence(persistence_dim_max=True)
+
+        if self._betti_numbers is None:
+            self._st.compute_persistence(persistence_dim_max=True)
+            self._betti_numbers = self._st.betti_numbers()
+        return self._st.betti_numbers()
 
 class NerveComplex(Complex):
     def __init__(self, lms, eps, max_dim, points=[]):
@@ -259,7 +334,7 @@ class NerveComplex(Complex):
         return self._eps
 
 
-class PatchedWitnessComplex(NerveComplex):
+class OldPatchedWitnessComplex(NerveComplex):
     def __init__(self, lms, eps, max_dim=-1, points=[], patching=True,
                  patching_level=1, patched_dimensions=[2], record_witnesses=False):
         """

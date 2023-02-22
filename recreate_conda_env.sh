@@ -1,4 +1,4 @@
-base_env_name='base'
+base_env_name='dyrect'
 piped_env_name=$base_env_name'_piped'
 
 echo $piped_env_name

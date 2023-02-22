@@ -3,61 +3,68 @@ import matplotlib.pyplot as plt
 import numpy as np
 # import scipy as sc
 import dyrect as dy
-from dyrect import draw_complex, unit_circle_sample, EpsilonNet, NerveComplex, PatchedWitnessComplex
+from dyrect import draw_complex, EpsilonNet, WitnessComplex, PatchedWitnessComplex
 
-np.random.seed(2)
-# crc1 = unit_circle_sample(4000, 0.75) + [1.1,0]
-# crc2 = unit_circle_sample(4000, 0.75) - [1.1,0]
-# points = np.append(crc1, crc2, axis=0)
-# eps=.25
+def draw_example(lms, points, eps, complex):
+    fwidth = 20
+    fig = plt.figure(figsize=(fwidth, fwidth*0.4))
+    rows = 1
+    cols = 2
 
-points = np.random.random((1000,2))
-eps=0.1
+    ax = plt.subplot(rows, cols, 1)
+    plt.scatter(points[:, 0], points[:, 1], s=0.2)
+    plt.scatter(lms[:, 0], lms[:, 1], s=5.2)
+    for lm in lms:
+        crc = plt.Circle(lm, eps, color='r', alpha=0.05)
+        ax.add_patch(crc)
 
-EN = EpsilonNet(eps, 0)
-EN.fit(points)
-lms = EN.landmarks
-# points = np.random.random((10000,2))
+    ax = plt.subplot(rows, cols, 2)
+    draw_complex(complex, fig=fig, ax=ax, vlabels=True)
+    plt.show()
 
-# crc1 = unit_circle_sample(1000, 0.75) + [1.1,0]
-# crc2 = unit_circle_sample(1000, 0.75) - [1.1,0]
-# points = np.append(crc1, crc2, axis=0)
+def simple_six_hole_example():
+    lms = np.array([[0., 1.], [1., 1.], [1., -0.5], [0., -1.], [-1., -0.5], [-1.5, 0.5]])
+    points = np.array([lms[np.mod(i,6)]/2+lms[np.mod(i+1, 6)]/2 for i in range(7)])
+    points = np.vstack((lms, points))
+    print(points)
 
-print("EN done")
-# points = np.random.random((1200,2))
+    eps = 0.8
+    pwc = PatchedWitnessComplex(lms, points, 2, patching_level=3)
+    draw_example(lms, points, eps, pwc)
 
-# plt.figure()
-# plt.scatter(points[:,0], points[:,1])
-# plt.show()
+def flat_six_hole_example():
+    lms = np.array([[0., 1.], [1.9, 0.8], [1.9, -0.9], [0., -1.], [-1.88, -0.89], [-1.91, 0.91]])
+    points = np.array([lms[np.mod(i,6)]/2+lms[np.mod(i+1, 6)]/2 for i in range(7)])
+    points = np.vstack((lms, points))
+    print(points)
 
-# fig = plt.figure(figsize=(15,10))
-# fig = plt.figure()
-fwidth = 20
-fig = plt.figure(figsize=(fwidth, fwidth*0.4))
-rows = 1
-cols = 2
+    eps = 0.8
+    pwc = PatchedWitnessComplex(lms, points, 2, patching_level=3)
+    # pwc = WitnessComplex(lms, points, 2)
+    draw_example(lms, points, eps, pwc)
 
-ax = plt.subplot(rows, cols, 1)
-plt.scatter(points[:,0], points[:,1], s=0.2)
-# plt.scatter(series[:,0], series[:,1], s=0.2)
-plt.scatter(lms[:,0], lms[:,1], s=5.2)
+def unit_square_example():
+    np.random.seed(1)
+    # crc1 = unit_circle_sample(4000, 0.75) + [1.1,0]
+    # crc2 = unit_circle_sample(4000, 0.75) - [1.1,0]
+    # points = np.append(crc1, crc2, axis=0)
+    # eps=.25
 
-for lm in lms:
-    crc = plt.Circle(lm, eps, color='r', alpha=0.05)
-    ax.add_patch(crc)
+    points = np.random.random((5000, 2))
+    eps=0.05
 
-# ax = plt.subplot(rows, cols, 2)
-# nc = NerveComplex(lms, eps, 2, points=points)
-# draw_complex(nc, fig=fig, ax=ax)
-# # plt.show()
+    EN = EpsilonNet(eps, 0)
+    EN.fit(points)
+    lms = EN.landmarks
+    print("EN done")
 
-ax = plt.subplot(rows, cols, 2)
-pwc = PatchedWitnessComplex(lms, eps, 2, points=points, patching=False, record_witnesses=True)
-draw_complex(pwc, fig=fig, ax=ax, vlabels=True)
-print(pwc._unproductive_witnesses)
-[unprod_x, unprod_y] = np.array([points[i, :] for i in pwc._unproductive_witnesses[2]]).T
-ax.scatter(unprod_x, unprod_y, color='k', s = 0.5)
-plt.show()
+    wc = WitnessComplex(lms, points, 2)
+    draw_example(lms, points, eps, wc)
+    pwc = PatchedWitnessComplex(lms, points, 2, patching_level=3)
+    draw_example(lms, points, eps, pwc)
+
+# flat_six_hole_example()
+unit_square_example()
 
 # from scipy.spatial.distance import cdist
 # from itertools import combinations
@@ -121,23 +128,3 @@ plt.show()
 # plt.xlim(limits[0])
 # plt.ylim(limits[1])
 # plt.show()
-
-##### Draw patched witness complex
-fig = plt.figure()
-ax = plt.subplot()
-anc2 = PatchedWitnessComplex(lms, eps, 2, points=points, patching=True, patching_level=3)
-draw_complex(anc2, fig=fig, ax=ax)
-plt.show()
-
-
-# ax = plt.subplot(rows, cols, 3)
-# TM = dy.TransitionMatrix(lms, eps, alpha=True)
-# transitions = TM.fit(points)
-# prob_matrix = dy.trans2prob(transitions)
-# dy.draw_transition_graph(prob_matrix, lms, threshold=0.01, node_size=10, edge_size=8, fig=fig, ax=ax)
-#
-# ax = plt.subplot(rows, cols, 4)
-# GTM = GeomTransitionMatrix(lms, nc, eps, alpha=True)
-# transitions = GTM.fit(series_emb)
-# gtm_prob_matrix = dy.trans2prob(transitions)
-# dy.draw_transition_graph(gtm_prob_matrix, lms, threshold=0.01, node_size=10, edge_size=8, fig=fig, ax=ax)

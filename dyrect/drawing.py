@@ -51,13 +51,14 @@ def draw_transition_graph(trans_mat, vert_coords, threshold=1.0, node_size=50, e
 def draw_complex(complex, fig=None, ax=None, circles=False, dim=None, col='blue', alpha=0.4, vlabels=False):
     if fig == None or ax == None:
         fig = plt.figure(figsize=(10, 8))
-        if dim == 3 or complex.dimension > 2:
+        print(dim, complex._ambient_dim)
+        if dim == 3 or complex._ambient_dim > 2:
             ax = fig.add_subplot(projection='3d')
             ax.set_box_aspect((1.0, 1.0, 0.25))
         else:
             ax = fig.add_subplot()
 
-    if dim == 3 or complex.dimension > 2:
+    if dim == 3 or complex._ambient_dim > 2:
         vertices = np.array([complex.coordinates[v[0]] for v in complex.simplices[0]])
         # print(vertices)
         ax.scatter(vertices[:, 0], vertices[:, 1], vertices[:, 2], c=col, s=30)
