@@ -1,7 +1,20 @@
 import numpy as np
 from math import pi
 from scipy.integrate import RK45
-# import sympy as sym
+from .epsilon_net import Complex
+
+
+def simple_complex():
+    c = Complex(simplices={0: [(0,), (1,), (2,), (3,), (4,)],
+                           1: [(0, 1), (1, 2), (0, 1)],
+                           2: [(0, 1, 2)]},
+                coords=np.array([[0.0, 0.0],
+                                 [1.0, 1.0],
+                                 [-1.0, 1.0],
+                                 [1.0, 2.0],
+                                 [-1., 2.0]])
+                )
+    return c
 
 
 def generate_points(system, dimension, starting_point, n_points=1000, int_step=0.02):
@@ -233,7 +246,7 @@ def sampled_2d_system(system, nsp, ts, step=0.02, adaptive_step=False, bounds=np
 # ############## 3D TIME SERIES ##############
 # ############## ############## ##############
 
-def lorenz_attractor(npoints, step=0.02, adaptive_step=False, starting_point=None, skip=2000):
+def lorenz_attractor(npoints, step=0.02, adaptive_step=False, starting_point=None, skip=10000):
     if starting_point is None:
         starting_point = [1., 1., 1.]
     points = np.empty((npoints, 3))

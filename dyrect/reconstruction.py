@@ -307,13 +307,15 @@ class Seer:
         t1 = len(paths[0])
         period = t1-t0
 
-        t_subcomplexes = []
+        # t_subcomplexes = []
         t_components = []
         for t in range(t0, t1):
-            tsnc, components = complex.subcomplex(paths[:, t])
-            t_subcomplexes.append(tsnc)
+            tsnc = complex.subcomplex(paths[:, t])
+            components = tsnc.components
+            # tsnc, components = complex.subcomplex(paths[:, t])
+            # t_subcomplexes.append(tsnc)
             t_components.append(
-                [set([i for i in range(len(paths)) if paths[i, t] in component]) for component in components])
+                [set([i for i in range(len(paths)) if paths[i, t] in component]) for component in components.subsets()])
 
         t_clusters = {0: t_components[0]}
         for t in range(1, period):
@@ -328,7 +330,7 @@ class Seer:
         for c in t_clusters:
             nlc = len(t_clusters[c])
             if nlc != lc:
-                print("T: ", c, " components: ", nlc)
+                print("at step T: ", c, "\t number of components: ", nlc)
                 lc = nlc
 
         for step in steps:
@@ -406,7 +408,7 @@ class Seer:
 
             ax.scatter(combinatorial_past[:, 0], combinatorial_past[:, 1], c='black', s=30)
             ax.plot(combinatorial_past[:, 0], combinatorial_past[:, 1], c='black',
-                    linewidth=4)
+                    linewidth=10)
 
             for cpath in prediction.futures:
                 path = np.array([self._cover[k] for k in cpath.sequence[(len(prediction.past)):]])

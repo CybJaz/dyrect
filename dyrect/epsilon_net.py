@@ -66,13 +66,40 @@ class EpsilonNet:
     #     return self._complex
 
 class Complex():
-    def __init__(self, max_dim=-1, ambient_dim=-1):
-        self._simplices = dict()
-        self._coordinates = None
+    def __init__(self, simplices = None, coords = None, max_dim=-1, ambient_dim=None):
+        """
+        @param simplices: dictionary of simplices; WARNING: the constructor does not check if faces are missing
+        @param coords:
+        @param max_dim:
+        @param ambient_dim:
+        """
         self._st = SimplexTree()
-        self._dim = max_dim
-        self._ambient_dim = ambient_dim
-        self._betti_numbers = None
+        if simplices is None:
+            self._simplices = dict()
+            self._betti_numbers = None
+        else:
+            self._simplices = simplices
+            for d in simplices:
+                for s in simplices[d]:
+                    self._st.insert(s)
+            self._st.compute_persistence(persistence_dim_max=True)
+            self._betti_numbers = self._st.betti_numbers()
+
+        self._coordinates = coords
+        if coords is not None:
+            self._ambient_dim = coords.shape[1]
+        else:
+            self._ambient_dim = ambient_dim
+
+        dimension = [k for k in self._simplices.keys() if len(self._simplices[k]) == 0]
+        if len(dimension) == 0:
+            dimension = max(self._simplices.keys())
+        else:
+            dimension = min(dimension) - 1
+        if max_dim < 0:
+            self._dim = dimension
+        else:
+            self._dim = min(max_dim, dimension)
 
     @classmethod
     def construct(cls, simpls, coords=None, max_dim = -1):
@@ -125,6 +152,10 @@ class Complex():
         return self._simplices
 
     @property
+    def ambient_dimension(self):
+        return self._ambient_dim
+
+    @property
     def dimension(self):
         return self._dim
 
@@ -172,6 +203,16 @@ class Complex():
         # print(baricentric_simplices)
         return Complex.construct(baricentric_simplices, np.array(baricenters))
 
+    @property
+    def components(self):
+        """
+            Get a partition of vertices into connected components.
+        """
+        components = DisjointSet([v for (v,) in self._simplices[0]])
+        for (v1, v2) in self._simplices[1]:
+            components.merge(v1, v2)
+        return components
+
     def subcomplex(self, vertices):
         """
             Max subcomplex spanned by a set of vertices.
@@ -187,6 +228,8 @@ class Complex():
 
         ### TODO: this could be done more efficiently
         for v in vset:
+            if (v,) not in self._simplices[0]:
+                continue
             cofaces = [c[0] for c in self._st.get_cofaces([v], 0)]
             for cof in cofaces:
                 if set(cof).issubset(vertices):
@@ -198,7 +241,7 @@ class Complex():
                         components.merge(cof[0], cof[1])
         sst.persistence()
 
-        return Complex.construct(sub_simplices, self.coordinates)
+        return Complex(simplices=sub_simplices, coords=self.coordinates)
 
     @property
     def betti_numbers(self):
@@ -235,7 +278,9 @@ class NerveComplex(Complex):
         self._coordinates = lms
         self._eps = eps
         self._dim = max_dim
+        self._ambient_dim = lms.shape[1]
 
+        assert False, "this class needs to be fixed"
         num_of_points = len(points)
         distances = cdist(points, lms, 'euclidean')
 

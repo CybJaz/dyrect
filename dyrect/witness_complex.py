@@ -37,6 +37,7 @@ class WitnessComplex(Complex):
         # print(argsort_dists[10,:])
 
         if self._eps > 0:
+            assert False, "an option with positive epsilon needs to be tested"
             ### 0-simplices
             self._simplices[0] = []
             for i in range(len(witnesses)):

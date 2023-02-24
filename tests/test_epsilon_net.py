@@ -6,39 +6,42 @@ import numpy as np
 import dyrect as dy
 import matplotlib.pyplot as plt
 
-bplot = True
+# bplot = True
+#
+# np.random.seed(0)
+# points = dy.lemniscate(1000, step=0.2, tnoise=0.02, noise=0.05)
+# eps = 0.15
+#
+# EN = dy.EpsilonNet(eps, 0)
+# EN.fit(points)
+# lms = EN._landmarks
+# print(lms.shape)
+#
+# if bplot:
+#     plt.figure()
+#     plt.scatter(points[:, 0], points[:, 1], s=0.5)
+#     plt.scatter(lms[:, 0], lms[:, 1], s=21.9)
+#
+# TM = dy.TransitionMatrix(lms, eps)
+# transitions = TM.transform(points)
+# prob_matrix = dy.trans2prob(transitions)
+#
+# nc = dy.NerveComplex(lms, eps, 2, points)
+# print(nc.betti_numbers)
+#
+# if bplot:
+#     dy.draw_transition_graph(prob_matrix, lms, threshold=0.15)
+#     plt.show()
+#     dy.draw_complex(nc)
+#     plt.show()
+#
+#     snc, _ = nc.subcomplex(list(range(10,40)))
+#     dy.draw_complex(snc)
+#     plt.show()
 
-np.random.seed(0)
-# points = dy.lemniscate(10000, step=0.2, tnoise=0.02, noise=0.05)
-eps = 0.15
-
-EN = dy.EpsilonNet(eps, 0)
-EN.fit(points)
-lms = EN._landmarks
-print(lms.shape)
-
-if bplot:
-    plt.figure()
-    plt.scatter(points[:, 0], points[:, 1], s=0.5)
-    plt.scatter(lms[:, 0], lms[:, 1], s=21.9)
-
-TM = dy.TransitionMatrix(lms, eps)
-transitions = TM.transform(points)
-prob_matrix = dy.trans2prob(transitions)
-
-nc = dy.NerveComplex(lms, eps, 2, points)
-print(nc.betti_numbers)
-
-if bplot:
-    dy.draw_transition_graph(prob_matrix, lms, threshold=0.15)
-    plt.show()
-    dy.draw_complex(nc)
-    plt.show()
-
-    snc, _ = nc.subcomplex(list(range(10,40)))
-    dy.draw_complex(snc)
-    plt.show()
-
+c = dy.simple_complex()
+dy.draw_complex(c)
+plt.show()
 
 
 # def unit_circle_sample(npoints, noise=0.0):
