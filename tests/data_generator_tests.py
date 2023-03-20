@@ -9,6 +9,19 @@ from dyrect.data_generators import *
 
 
 class MyTestCase(unittest.TestCase):
+    def test_four_winged_generator(self):
+        n=20000
+        points=dadras_attractor(n, starting_point=[1., 1., 1., 1.], skip=10000, adaptive_step=False, step=0.01)
+
+        self.assertEqual(len(points), n)
+        self.assertFalse(any(points[-1]==0.))
+        self.assertFalse(any([math.isnan(x) for x in points[-1]]))
+
+        fig = plt.figure()
+        ax = fig.add_subplot(projection='3d')
+        ax.scatter(points[:, 0], points[:, 1], points[:, 2], s=0.2)
+        plt.show()
+
     def test_dadras_generator(self):
         n=20000
         points=dadras_attractor(n, starting_point=[1., 10., 10., 1.], skip=10000, adaptive_step=False, step=0.01)
@@ -17,22 +30,22 @@ class MyTestCase(unittest.TestCase):
         self.assertFalse(any(points[-1]==0.))
         self.assertFalse(any([math.isnan(x) for x in points[-1]]))
 
-        fig = plt.figure()
-        # ax = fig.add_subplot()
-        # ax.plot(points[:, 0], points[:, 2], linewidth=.1)
-        # ax.scatter(points[:, 0], points[:, 2], s=0.1)
-        ax = fig.add_subplot(projection='3d')
-        ax.plot(points[:, 0], points[:, 1], points[:, 2], linewidth=.1)
-        # ax.scatter(points[:, 0], points[:, 2], points[:, 1], s=0.1)
-        plt.show()
-
-        embx = dyrect.embedding(points[:, 0], 3, 8)
-        fig = plt.figure()
-        ax = fig.add_subplot()
-        ax.plot(embx[:, 0], embx[:, 1], linewidth=.1)
+        # fig = plt.figure()
+        # # ax = fig.add_subplot()
+        # # ax.plot(points[:, 0], points[:, 2], linewidth=.1)
+        # # ax.scatter(points[:, 0], points[:, 2], s=0.1)
         # ax = fig.add_subplot(projection='3d')
-        # ax.plot(embx[:, 0], embx[:, 1], embx[:, 2], linewidth=.1)
-        plt.show()
+        # ax.plot(points[:, 0], points[:, 1], points[:, 2], linewidth=.1)
+        # # ax.scatter(points[:, 0], points[:, 2], points[:, 1], s=0.1)
+        # plt.show()
+        #
+        # embx = dyrect.embedding(points[:, 0], 3, 8)
+        # fig = plt.figure()
+        # ax = fig.add_subplot()
+        # ax.plot(embx[:, 0], embx[:, 1], linewidth=.1)
+        # # ax = fig.add_subplot(projection='3d')
+        # # ax.plot(embx[:, 0], embx[:, 1], embx[:, 2], linewidth=.1)
+        # plt.show()
 
     def test_lorenz_generator(self):
         n=10000

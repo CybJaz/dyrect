@@ -1,3 +1,6 @@
+import functools
+from typing import List, Any
+
 import numpy as np
 from gudhi import SimplexTree
 from itertools import chain, combinations
@@ -6,8 +9,9 @@ from scipy.spatial.distance import cdist
 
 from .epsilon_net import Complex
 
+
 class WitnessComplex(Complex):
-    def __init__(self, landmarks, witnesses,  max_dim, eps=-1):
+    def __init__(self, landmarks, witnesses, max_dim, eps=-1):
         """
         :param lms:
         :param eps:
@@ -31,17 +35,14 @@ class WitnessComplex(Complex):
 
         distances = cdist(witnesses, self._coordinates, 'euclidean')
         argsort_dists = np.argsort(distances, axis=1)
-        # print(distances[10,:])
         distances.sort(axis=1)
-        # print(distances[10,:])
-        # print(argsort_dists[10,:])
 
         if self._eps > 0:
-            assert False, "an option with positive epsilon needs to be tested"
+            # assert False, "an option with positive epsilon needs to be tested"
             ### 0-simplices
             self._simplices[0] = []
             for i in range(len(witnesses)):
-                if distances[i, argsort_dists[i, 0]] <= self._eps:
+                if distances[i, 0] <= self._eps:
                     simplex = (argsort_dists[i, 0],)
                     if simplex not in self._simplices[0]:
                         self._simplices[0].append(simplex)
@@ -51,12 +52,12 @@ class WitnessComplex(Complex):
                 self._barren_witnesses[d] = []
                 self._weakly_witnessed[d] = []
                 for i in range(len(witnesses)):
-                    if distances[i, argsort_dists[i, d]] <= self._eps:
-                        simplex = tuple(np.sort(argsort_dists[i, :d+1]))
+                    if distances[i, d] <= self._eps:
+                        simplex = tuple(np.sort(argsort_dists[i, :d + 1]))
                         if simplex not in self._simplices[d]:
                             well_witnessed = True
                             for face in combinations(simplex, d):
-                                if face not in self._simplices[d-1]:
+                                if face not in self._simplices[d - 1]:
                                     well_witnessed = False
                                     break
                             if well_witnessed:
@@ -79,11 +80,11 @@ class WitnessComplex(Complex):
                 self._weakly_witnessed[d] = []
                 for i in range(len(witnesses)):
                     # if distances[i, argsort_dists[i, d]] <= self._eps:
-                    simplex = tuple(np.sort(argsort_dists[i, :d+1]))
+                    simplex = tuple(np.sort(argsort_dists[i, :d + 1]))
                     if simplex not in self._simplices[d]:
                         well_witnessed = True
                         for face in combinations(simplex, d):
-                            if face not in self._simplices[d-1]:
+                            if face not in self._simplices[d - 1]:
                                 well_witnessed = False
                                 break
                         if well_witnessed:
@@ -106,29 +107,19 @@ class WitnessComplex(Complex):
         obj._betti_numbers = None
         return obj
 
-    # @property
-    # def betti_numbers(self):
-    #     if self._st is None:
-    #         self._st = SimplexTree()
-    #         max_d = -1
-    #         for dsimplices in self._simplices.values():
-    #             for s in dsimplices:
-    #                 self._st.insert(list(s))
-    #                 if len(s) > max_d:
-    #                     max_d = len(s)
-    #         self._st.set_dimension(max_d)
-    #         self._st.compute_persistence()
-    #
-    #     return self._st.betti_numbers()
 
 class PatchedWitnessComplex(WitnessComplex):
-    def __init__(self, landmarks, witnesses,  max_dim, eps=-1,
+    def __init__(self, landmarks, witnesses, max_dim, eps=-1,
                  patching_level=1, max_patched_dimensions=2, patching_type="knitting"):
         super(PatchedWitnessComplex, self).__init__(landmarks, witnesses, max_dim, eps)
 
         distances = cdist(witnesses, self._coordinates, 'euclidean')
         argsort_dists = np.argsort(distances, axis=1)
         distances.sort(axis=1)
+
+        # TODO: incorporate eps into the patching
+        if eps > 0:
+            print("WARNING: eps is not taken into the account during the patching yet")
 
         # e.g. pd=2 is for closing 1-dim holes
         for pd in range(2, max_patched_dimensions + 1):
@@ -140,9 +131,9 @@ class PatchedWitnessComplex(WitnessComplex):
                 extra_simplices = []
 
                 if pd not in self._barren_witnesses:
-                   bwitnesses = range(len(witnesses))
+                    bwitnesses = range(len(witnesses))
                 else:
-                   bwitnesses = self._barren_witnesses[pd]
+                    bwitnesses = self._barren_witnesses[pd]
                 for x in bwitnesses:
                     new_simplex = tuple(np.sort(argsort_dists[x, :nvp]))
                     if new_simplex in extra_simplices:
@@ -151,15 +142,101 @@ class PatchedWitnessComplex(WitnessComplex):
                     hole_subcomplex = self.subcomplex(new_simplex)
                     ### Check if new_simplex is a simple cycle
                     if len(hole_subcomplex._simplices[pd]) == 0:
-                        num_of_cofaces = {i: 0 for i in hole_subcomplex._simplices[pd-2]}
-                        for s in hole_subcomplex._simplices[pd-1]:
-                            for face in combinations(s, pd-1):
+                        num_of_cofaces = {i: 0 for i in hole_subcomplex._simplices[pd - 2]}
+                        for s in hole_subcomplex._simplices[pd - 1]:
+                            for face in combinations(s, pd - 1):
                                 num_of_cofaces[face] += 1
-                        if all(np.array(list(num_of_cofaces.values()))==2):
+                        if all(np.array(list(num_of_cofaces.values())) == 2):
                             # print(hole_subcomplex.betti_numbers)
-                            self.knitting_patching(hole_subcomplex)
+                            # self.knitting_patching(hole_subcomplex)
+                            self.morse_patching(hole_subcomplex)
                             self.merge_complex(hole_subcomplex)
 
+    def morse_patching(self, hole_subcomplex):
+        """
+        @param hole_subcomplex:
+        @return:
+        """
+        vertices = [v for (v,) in hole_subcomplex.simplices[0]]
+        vertices.sort()
+        edges = [tuple(e) for e in combinations(vertices, 2)]
+        edge_lengths = {e: np.linalg.norm(self.coordinates[e[0]] - self.coordinates[e[1]]) for e in edges}
+        edge_type = {e: 0 if e in hole_subcomplex.simplices[1] else 1 for e in edges}
+
+        # print(vertices)
+
+        def get_signature(simplex):
+            root_part = []
+            root_types = []
+            patch_part = []
+            patch_types = []
+            for e in combinations(simplex, 2):
+                if edge_type[e] == 1:
+                    patch_part.append(edge_lengths[e])
+                else:
+                    root_part.append(edge_lengths[e])
+            # argsort_root = np.argsort(root_part)
+            # argsort_patch = np.argsort(patch_part)
+            # print(list(np.take(patch_part, argsort_patch)))
+            # print(list(np.take(root_part, argsort_root)))
+            # print(list(np.take(patch_part, argsort_patch)) + list(np.take(root_part, argsort_root)))
+            patch_part.sort(reverse=True)
+            root_part.sort(reverse=True)
+
+            return (len(simplex) - 1,
+                    # list(np.take(patch_part, argsort_patch)) + list(np.take(root_part, argsort_root)),
+                    patch_part + root_part,
+                    list(np.ones((len(patch_part),))) + list(np.zeros((len(root_part),)))
+                    )
+
+        def compare_signatures(s1, s2):
+            if s1[0] > s2[0]:
+                return 1
+            elif s1[0] < s2[0]:
+                return -1
+            else:
+                # if len(s1[2]) != len(s2[2]):
+                #     print('huh')
+                for i in range(len(s1)):
+                    if s1[2][i] > s2[2][i]:
+                        return 1
+                    elif s1[2][i] < s2[2][i]:
+                        return -1
+                    else:
+                        if s1[1][i] > s2[1][i]:
+                            return 1
+                        elif s1[1][i] < s2[1][i]:
+                            return -1
+            return 0
+
+        root = hole_subcomplex.simplices[0]
+        patch = []
+        signature = {}
+        for d in range(1, len(vertices)):
+            if d in hole_subcomplex.simplices:
+                for s in combinations(vertices, d + 1):
+                    signature[s] = get_signature(s)
+                    if s not in hole_subcomplex.simplices[d]:
+                        patch.append(s)
+                        # print(s, signature[s])
+                    else:
+                        root.append(s)
+            else:
+                for s in combinations(vertices, d + 1):
+                    patch.append(s)
+                    signature[s] = get_signature(s)
+                    print(s, signature[s])
+
+        def compare_simplices(s1, s2):
+            return compare_signatures(signature[s1], signature[s2])
+        queue = sorted(list(patch), key=functools.cmp_to_key(compare_simplices), reverse=True)
+        # print(queue)
+
+        flag = True
+        # while flag:
+        #     top_simplex = queue.pop()
+        #     print(top_simplex)
+        #     if
 
     def knitting_patching(self, hole_subcomplex):
         vertices = [v for (v,) in hole_subcomplex.simplices[0]]
@@ -171,7 +248,7 @@ class PatchedWitnessComplex(WitnessComplex):
             potential_edges.remove(e)
 
         # potential_edges = [tuple(e) for e in combinations(vertices, 2) if tuple(e) not in hole_subcomplex.simplices[1]]
-        edges_lengths = [np.linalg.norm(self.coordinates[e1]-self.coordinates[e2]) for (e1, e2) in potential_edges]
+        edges_lengths = [np.linalg.norm(self.coordinates[e1] - self.coordinates[e2]) for (e1, e2) in potential_edges]
         argsorted_edges = list(np.argsort(edges_lengths))
         while len(vertices) > 0:
             eidx = argsorted_edges.pop(0)

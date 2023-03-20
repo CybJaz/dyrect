@@ -1,5 +1,4 @@
 import matplotlib.pyplot as plt
-# import miniball
 import numpy as np
 # import scipy as sc
 import dyrect as dy
@@ -17,19 +16,32 @@ def draw_example(lms, points, eps, complex):
     for lm in lms:
         crc = plt.Circle(lm, eps, color='r', alpha=0.05)
         ax.add_patch(crc)
+    ax.set_aspect('equal')
 
     ax = plt.subplot(rows, cols, 2)
     draw_complex(complex, fig=fig, ax=ax, vlabels=True)
+    ax.set_aspect('equal')
     plt.show()
+
+def simple_four_hole_example():
+    lms = np.array([[0., 0.], [0., .9], [1., 1.], [.8, 0.1]])
+    points = np.array([lms[np.mod(i, 4)]/2 + lms[np.mod(i+1, 4)]/2 for i in range(4)])
+    points = np.vstack((lms, points))
+    # print(points)
+
+    pwc = PatchedWitnessComplex(lms, points, 2, patching_level=1)
+    draw_example(lms, points, 0.8, pwc)
 
 def simple_six_hole_example():
     lms = np.array([[0., 1.], [1., 1.], [1., -0.5], [0., -1.], [-1., -0.5], [-1.5, 0.5]])
     points = np.array([lms[np.mod(i,6)]/2+lms[np.mod(i+1, 6)]/2 for i in range(7)])
     points = np.vstack((lms, points))
-    print(points)
+    # print(points)
 
     eps = 0.8
-    pwc = PatchedWitnessComplex(lms, points, 2, patching_level=3)
+    # wc = WitnessComplex(lms, points, 2, eps)
+    # wc = WitnessComplex(lms, points, 2)
+    pwc = PatchedWitnessComplex(lms, points, 2, patching_level=1)
     draw_example(lms, points, eps, pwc)
 
 def flat_six_hole_example():
@@ -63,8 +75,10 @@ def unit_square_example():
     pwc = PatchedWitnessComplex(lms, points, 2, patching_level=3)
     draw_example(lms, points, eps, pwc)
 
+# simple_six_hole_example()
+simple_four_hole_example()
 # flat_six_hole_example()
-unit_square_example()
+# unit_square_example()
 
 # from scipy.spatial.distance import cdist
 # from itertools import combinations

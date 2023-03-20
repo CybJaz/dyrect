@@ -43,6 +43,15 @@ def lorentz_eq(_, args):
             args[0] * (l_rho - args[2]) - args[1],
             args[0] * args[1] - l_beta * args[2]]
 
+def four_winged_eq(_, args):
+    ### https://www.dynamicmath.xyz/strange-attractors/
+    l_a = .2
+    l_b = 0.01
+    l_c = -0.4
+    return [l_a * args[0] + args[1] * args[2],
+            l_b * args[0] + l_c * args[1] - args[0] * args[2],
+            - args[2] - args[0] * args[1]]
+
 
 def dadras_eq(_, args):
     da = 8.
@@ -245,6 +254,28 @@ def sampled_2d_system(system, nsp, ts, step=0.02, adaptive_step=False, bounds=np
 
 # ############## 3D TIME SERIES ##############
 # ############## ############## ##############
+
+def four_winged_strange_attractor(npoints, step=0.05, adaptive_step=False, starting_point=None, skip=10000):
+    if starting_point is None:
+        starting_point = [1., 1., 1.]
+    points = np.empty((npoints, 3))
+    integrator = RK45(four_winged_eq, 0, starting_point, 10000,
+                      first_step=step, max_step=(4 * step if adaptive_step else step))
+
+    # get closer to the attractor first
+    for _ in range(skip):
+        integrator.step()
+
+    for i in range(npoints):
+        points[i] = integrator.y
+        if integrator.status == 'running':
+            integrator.step()
+        else:
+            print('reloading integrator at ' + str(i))
+            integrator = RK45(four_winged_eq, 0, points[i], 10000,
+                              first_step=step, max_step=(4 * step if adaptive_step else step))
+    return points
+
 
 def lorenz_attractor(npoints, step=0.02, adaptive_step=False, starting_point=None, skip=10000):
     if starting_point is None:

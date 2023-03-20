@@ -179,18 +179,18 @@ def symbolization(X, lms, eps=0, simplified=False):
     return symbols
 
 
-def symb2string(symbols, codesize=-1):
-    """
-    Transforms a list (symbols) of positive integers into a string
-    :param symbols: a list of integers
-    :param codesize:
-    :return:
-    """
-    m = np.max(symbols)
-    if codesize < 1:
-        codesize = len(str(m))
-    nums = [''.join([str(0) for _ in range(codesize - len(str(x)))]) + str(x) for x in symbols]
-    return '-'.join(nums)
+# def symb2string(symbols, codesize=-1):
+#     """
+#     Transforms a list (symbols) of positive integers into a string
+#     :param symbols: a list of integers
+#     :param codesize:
+#     :return:
+#     """
+#     m = np.max(symbols)
+#     if codesize < 1:
+#         codesize = len(str(m))
+#     nums = [''.join([str(0) for _ in range(codesize - len(str(x)))]) + str(x) for x in symbols]
+#     return '-'.join(nums)
 
 
 @dataclass
@@ -204,6 +204,50 @@ class Future:
 class Prediction:
     past: tuple
     futures: list
+
+
+def kmp_algorithm(pattern, text):
+    """
+    Finds all occurrences of a pattern in a text using the Knuth-Morris-Pratt algorithm.
+    :param pattern (list): The pattern to search for.
+    :param text (list): The text to search in.
+    :return A list of indices where the pattern is found in the text.
+    """
+
+    # Compute the failure function of the pattern
+    failure = partial_match_kmp(pattern)
+
+    # Search for the pattern in the text using the failure function
+    i, j = 0, 0
+    matches = []
+    while i < len(text):
+        if pattern[j] == text[i]:
+            i += 1
+            j += 1
+            if j == len(pattern):
+                matches.append(i - j)
+                j = failure[j-1]
+        elif j > 0:
+            j = failure[j-1]
+        else:
+            i += 1
+    return matches
+
+def partial_match_kmp(pattern):
+    """
+    Computes the partial match function of a pattern for Knuth-Morris-Pratt algorithm.
+    :param pattern (list): The pattern to compute the failure function of.
+    :return: A list of integers representing the failure function of the pattern.
+    """
+    failure = [0] * len(pattern)
+    j = 0
+    for i in range(1, len(pattern)):
+        while j > 0 and pattern[j] != pattern[i]:
+            j = failure[j-1]
+        if pattern[j] == pattern[i]:
+            j += 1
+        failure[i] = j
+    return failure
 
 
 # history - a training time series
@@ -229,14 +273,11 @@ class Seer:
         self._history = history
         self._cover = cover
         self._eps = eps
-        codes = symbolization(history, cover, eps)
-        self._codesize = len(str(max(codes)))
-        self._history_book = symb2string(codes)
+        self._history_book = symbolization(history, cover, eps)
         self._dimension = len(history[0])
         assert len(cover[0]) == self._dimension
 
         # it's state-machine like variables
-        self._recent_reg = None
         self._recent_query = None
         self._recent_story = None
         self._recent_futures = None
@@ -263,20 +304,17 @@ class Seer:
             # the negative symbol means an unknown symbol
             print("this past has never happened before")
             return None
-        self._recent_reg = symb2string(self._recent_story, codesize=self._codesize) + '.{' + str(f * (self._codesize+1)) + '}'
-        # print(reg)
-        futures = [(event.group(0), event.span(0)) for event in re.finditer(self._recent_reg, self._history_book)]
-        # print(futures[0])
-        futures = [(tuple([int(k) for k in f[1:].split('-')]), idxs) for (f, idxs) in futures]
-        # self._recent_unique_futures = Counter([future[0][-f * (self._codesize+1):] for future in futures])
+
+        past_instances = kmp_algorithm(self._recent_story, self._history_book)
         futures_dict = dict()
-        for f, idxs in futures:
-            (b,e) = (int(idxs[0] / (self._codesize+1.)), int((idxs[1] + 1) / (self._codesize+1.)))
-            if f in futures_dict:
-                futures_dict[f].counter += 1
-                futures_dict[f].occurences.append((b,e))
+        for idx in past_instances:
+            idx_end = idx + p + f
+            past_and_future = tuple(self._history_book[idx:idx_end])
+            if past_and_future in futures_dict:
+                futures_dict[past_and_future].counter += 1
+                futures_dict[past_and_future].occurences.append((idx, idx_end))
             else:
-                futures_dict[f] = Future(f, 1, [(b,e)])
+                futures_dict[past_and_future] = Future(past_and_future, 1, [(idx, idx_end)])
 
         self._recent_futures = [f for f in futures_dict.values()]
         self._recent_futures.sort(key=(lambda f: f.counter), reverse=True)
