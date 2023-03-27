@@ -78,15 +78,18 @@ def draw_complex(complex, fig=None, ax=None, circles=False, dim=None, col='blue'
 
         if vlabels:
             for v in complex.simplices[0]:
-                ax.annotate(str(v[0]), (complex.coordinates[v[0], 0], complex.coordinates[v[0], 1]), fontsize=15)
+                # ax.annotate(str(v[0]), (complex.coordinates[v[0], 0], complex.coordinates[v[0], 1]), fontsize=15)
+                ax.annotate(str(v[0]), (complex.coords_of(v[0])[0], complex.coords_of(v[0])[1]), fontsize=15)
 
         for edge in complex.simplices[1]:
-            verts = complex.coordinates[list(edge), :]
+            # verts = complex.coordinates[list(edge), :]
+            verts = np.array(complex.coords_list(list(edge)))
             ax.plot(verts[:, 0], verts[:, 1], c=col, linewidth=2)
 
         if 2 in complex.simplices:
             for tr in complex.simplices[2]:
-                verts = complex.coordinates[list(tr), :]
+                # verts = complex.coordinates[list(tr), :]
+                verts = np.array(complex.coords_list(list(tr)))
                 tr = plt.Polygon(verts[:, :2], alpha=0.5, color=col)
                 plt.gca().add_patch(tr)
             #     t = ax.add_collection3d(Poly3DCollection(verts))

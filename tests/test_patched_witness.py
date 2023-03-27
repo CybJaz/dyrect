@@ -31,6 +31,7 @@ def simple_four_hole_example():
 
     pwc = PatchedWitnessComplex(lms, points, 2, patching_level=1)
     draw_example(lms, points, 0.8, pwc)
+    print(pwc.simplices)
 
 def simple_six_hole_example():
     lms = np.array([[0., 1.], [1., 1.], [1., -0.5], [0., -1.], [-1., -0.5], [-1.5, 0.5]])
@@ -41,7 +42,7 @@ def simple_six_hole_example():
     eps = 0.8
     # wc = WitnessComplex(lms, points, 2, eps)
     # wc = WitnessComplex(lms, points, 2)
-    pwc = PatchedWitnessComplex(lms, points, 2, patching_level=1)
+    pwc = PatchedWitnessComplex(lms, points, 2, patching_level=3)
     draw_example(lms, points, eps, pwc)
 
 def flat_six_hole_example():
@@ -75,10 +76,11 @@ def unit_square_example():
     pwc = PatchedWitnessComplex(lms, points, 2, patching_level=3)
     draw_example(lms, points, eps, pwc)
 
+
 # simple_six_hole_example()
-simple_four_hole_example()
+# simple_four_hole_example()
 # flat_six_hole_example()
-# unit_square_example()
+unit_square_example()
 
 # from scipy.spatial.distance import cdist
 # from itertools import combinations

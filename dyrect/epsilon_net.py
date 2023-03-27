@@ -1,7 +1,4 @@
-import itertools
-
 from gudhi import SimplexTree
-from itertools import combinations
 import numpy as np
 from scipy.cluster.hierarchy import DisjointSet
 from scipy.spatial.distance import cdist
@@ -85,11 +82,15 @@ class Complex():
             self._st.compute_persistence(persistence_dim_max=True)
             self._betti_numbers = self._st.betti_numbers()
 
-        self._coordinates = coords
-        if coords is not None:
-            self._ambient_dim = coords.shape[1]
-        else:
+        if coords is None:
             self._ambient_dim = ambient_dim
+            self._coordinates = dict()
+        elif type(coords) == dict:
+            self._coordinates = coords
+            self._ambient_dim = len(list(coords.values())[0])
+        else:
+            self._ambient_dim = coords.shape[1]
+            self._coordinates = {idx: coord for idx, coord in enumerate(coords)}
 
         dimension = [k for k in self._simplices.keys() if len(self._simplices[k]) == 0]
         if len(dimension) == 0:
@@ -106,15 +107,22 @@ class Complex():
         obj = cls.__new__(cls)
         obj.__init__()
         obj._simplices = simpls
-        obj._coordinates = coords
         for ds in simpls:
             for s in simpls[ds]:
                 obj._st.insert(s)
         obj._st.compute_persistence(persistence_dim_max=True)
         obj._betti_numbers = obj._st.betti_numbers()
 
-        if coords is not None:
-            obj._ambient_dim = coords.shape[0]
+        if coords is None:
+            obj._ambient_dim = None
+            obj._coordinates = dict()
+        elif type(coords) == dict:
+            obj._coordinates = coords
+            obj._ambient_dim = len(list(coords.values()[0]))
+        else:
+            obj._ambient_dim = coords.shape[1]
+            obj._coordinates = {idx: coord for idx, coord in enumerate(coords)}
+
         dimension = [k for k in simpls.keys() if len(simpls[k]) == 0]
         if len(dimension) == 0:
             dimension = max(simpls.keys())
@@ -142,6 +150,15 @@ class Complex():
                 if s not in self.simplices[d]:
                     self._simplices[d].append(s)
                     self._st.insert(s)
+        for c in patch.coordinates:
+            if c not in self.coordinates:
+                self.coordinates[c] = patch.coordinates[c]
+
+    def coords_of(self, v):
+        return self.coordinates[v]
+
+    def coords_list(self, arr):
+        return [self.coordinates[v] for v in arr]
 
     @property
     def coordinates(self):
@@ -193,7 +210,8 @@ class Complex():
         # simplex2baricenter = dict()
         for i, s in zip(range(nsimplices), chain(*self.simplices.values())):
             # sim2idx[s] = i
-            bc = np.average(self.coordinates[list(s), :], axis=0)
+            bc = np.average([self.coords_of(x) for x in s], axis=0)
+            # bc = np.average(self.coordinates[list(s), :], axis=0)
             baricenters.append(bc)
             # for d in range(1,len(s)):
             # if len(s) > 1:
@@ -241,7 +259,8 @@ class Complex():
                         components.merge(cof[0], cof[1])
         sst.persistence()
 
-        return Complex(simplices=sub_simplices, coords=self.coordinates)
+        subcoords = {v: self.coordinates[v] for v in vertices}
+        return Complex(simplices=sub_simplices, coords=subcoords)
 
     @property
     def betti_numbers(self):
@@ -270,6 +289,7 @@ class NerveComplex(Complex):
         :param points:
         """
         """
+            LONG TIME WITHOUT ANY UPDATE probably doesn't work
             TODO: if list of points is empty then generate just a rips-complex
             TODO: adjust code for max_dim=-1
         """

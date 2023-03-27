@@ -24,16 +24,24 @@ class WitnessComplex(Complex):
         """
         self._st = SimplexTree()
         self._simplices = dict()
-        self._coordinates = landmarks
+        # self._coordinates = landmarks
         self._eps = eps
         self._dim = max_dim
-        """ ambient space dimension """
-        self._ambient_dim = landmarks.shape[1]
+        # """ ambient space dimension """
+        # self._ambient_dim = landmarks.shape[1]
+
+        if type(landmarks) == dict:
+            self._coordinates = landmarks
+            self._ambient_dim = len(list(landmarks.values()[0]))
+        else:
+            self._ambient_dim = landmarks.shape[1]
+            self._coordinates = {idx: coord for idx, coord in enumerate(landmarks)}
 
         self._barren_witnesses = dict()
         self._weakly_witnessed = dict()
 
-        distances = cdist(witnesses, self._coordinates, 'euclidean')
+        # print(np.array(list(self._coordinates.values())))
+        distances = cdist(witnesses, np.array(list(self._coordinates.values())), 'euclidean')
         argsort_dists = np.argsort(distances, axis=1)
         distances.sort(axis=1)
 
@@ -102,18 +110,22 @@ class WitnessComplex(Complex):
         obj = cls.__new__(cls)
         obj._st = st
         obj._simplices = simpls
-        obj._coordinates = coords
+        if type(coords) == dict:
+            obj._coordinates = coords
+            obj._ambient_dim = len(list(coords.values()[0]))
+        else:
+            obj._ambient_dim = coords.shape[1]
+            obj._coordinates = {idx: coord for idx, coord in enumerate(coords)}
         obj._dim = dim
         obj._betti_numbers = None
         return obj
-
 
 class PatchedWitnessComplex(WitnessComplex):
     def __init__(self, landmarks, witnesses, max_dim, eps=-1,
                  patching_level=1, max_patched_dimensions=2, patching_type="knitting"):
         super(PatchedWitnessComplex, self).__init__(landmarks, witnesses, max_dim, eps)
 
-        distances = cdist(witnesses, self._coordinates, 'euclidean')
+        distances = cdist(witnesses, np.array(list(self._coordinates.values())), 'euclidean')
         argsort_dists = np.argsort(distances, axis=1)
         distances.sort(axis=1)
 
@@ -121,6 +133,7 @@ class PatchedWitnessComplex(WitnessComplex):
         if eps > 0:
             print("WARNING: eps is not taken into the account during the patching yet")
 
+        # Patched dimension
         # e.g. pd=2 is for closing 1-dim holes
         for pd in range(2, max_patched_dimensions + 1):
             # e.g. cpd=1 uses 3-simplices for closing 1-holes
@@ -149,94 +162,134 @@ class PatchedWitnessComplex(WitnessComplex):
                         if all(np.array(list(num_of_cofaces.values())) == 2):
                             # print(hole_subcomplex.betti_numbers)
                             # self.knitting_patching(hole_subcomplex)
-                            self.morse_patching(hole_subcomplex)
+                            # self.web_patching(hole_subcomplex)
+                            self.fan_patching(hole_subcomplex)
+                            # self.morse_patching(hole_subcomplex)
                             self.merge_complex(hole_subcomplex)
 
-    def morse_patching(self, hole_subcomplex):
-        """
-        @param hole_subcomplex:
-        @return:
-        """
+    def fan_patching(self, hole_subcomplex):
         vertices = [v for (v,) in hole_subcomplex.simplices[0]]
         vertices.sort()
-        edges = [tuple(e) for e in combinations(vertices, 2)]
-        edge_lengths = {e: np.linalg.norm(self.coordinates[e[0]] - self.coordinates[e[1]]) for e in edges}
-        edge_type = {e: 0 if e in hole_subcomplex.simplices[1] else 1 for e in edges}
+        v0 = vertices[0]
 
-        # print(vertices)
+        dims = list(hole_subcomplex.simplices.keys())
+        dims.sort(reverse=True)
+        hole_subcomplex.simplices[dims[0]+1] = []
+        for d in dims:
+            for s in hole_subcomplex.simplices[d]:
+                new_simplex = list(s) + [v0]
+                new_simplex.sort()
+                if new_simplex not in hole_subcomplex.simplices[d+1]:
+                    hole_subcomplex.simplices[d+1].append(tuple(new_simplex))
+        hole_subcomplex.simplices[0].append((v0,))
 
-        def get_signature(simplex):
-            root_part = []
-            root_types = []
-            patch_part = []
-            patch_types = []
-            for e in combinations(simplex, 2):
-                if edge_type[e] == 1:
-                    patch_part.append(edge_lengths[e])
-                else:
-                    root_part.append(edge_lengths[e])
-            # argsort_root = np.argsort(root_part)
-            # argsort_patch = np.argsort(patch_part)
-            # print(list(np.take(patch_part, argsort_patch)))
-            # print(list(np.take(root_part, argsort_root)))
-            # print(list(np.take(patch_part, argsort_patch)) + list(np.take(root_part, argsort_root)))
-            patch_part.sort(reverse=True)
-            root_part.sort(reverse=True)
+    def web_patching(self, hole_subcomplex):
+        vertices = [v for (v,) in hole_subcomplex.simplices[0]]
+        vertices.sort()
 
-            return (len(simplex) - 1,
-                    # list(np.take(patch_part, argsort_patch)) + list(np.take(root_part, argsort_root)),
-                    patch_part + root_part,
-                    list(np.ones((len(patch_part),))) + list(np.zeros((len(root_part),)))
-                    )
+        # coords_center = np.mean([self.coordinates[v] for v in vertices], axis=0)
+        coords_center = np.mean(self.coords_list(vertices), axis=0)
+        idx_center = len(self.simplices[0])
+        hole_subcomplex._coordinates[idx_center] = coords_center
+        print(coords_center)
 
-        def compare_signatures(s1, s2):
-            if s1[0] > s2[0]:
-                return 1
-            elif s1[0] < s2[0]:
-                return -1
-            else:
-                # if len(s1[2]) != len(s2[2]):
-                #     print('huh')
-                for i in range(len(s1)):
-                    if s1[2][i] > s2[2][i]:
-                        return 1
-                    elif s1[2][i] < s2[2][i]:
-                        return -1
-                    else:
-                        if s1[1][i] > s2[1][i]:
-                            return 1
-                        elif s1[1][i] < s2[1][i]:
-                            return -1
-            return 0
+        dims = list(hole_subcomplex.simplices.keys())
+        dims.sort(reverse=True)
+        hole_subcomplex.simplices[dims[0]+1] = []
+        for d in dims:
+            for s in hole_subcomplex.simplices[d]:
+                new_simplex = list(s) + [idx_center]
+                new_simplex.sort()
+                hole_subcomplex.simplices[d+1].append(tuple(new_simplex))
+        hole_subcomplex.simplices[0].append((idx_center,))
 
-        root = hole_subcomplex.simplices[0]
-        patch = []
-        signature = {}
-        for d in range(1, len(vertices)):
-            if d in hole_subcomplex.simplices:
-                for s in combinations(vertices, d + 1):
-                    signature[s] = get_signature(s)
-                    if s not in hole_subcomplex.simplices[d]:
-                        patch.append(s)
-                        # print(s, signature[s])
-                    else:
-                        root.append(s)
-            else:
-                for s in combinations(vertices, d + 1):
-                    patch.append(s)
-                    signature[s] = get_signature(s)
-                    print(s, signature[s])
 
-        def compare_simplices(s1, s2):
-            return compare_signatures(signature[s1], signature[s2])
-        queue = sorted(list(patch), key=functools.cmp_to_key(compare_simplices), reverse=True)
-        # print(queue)
-
-        flag = True
-        # while flag:
-        #     top_simplex = queue.pop()
-        #     print(top_simplex)
-        #     if
+    # ### UNFINISHED METHOD!
+    # def morse_patching(self, hole_subcomplex):
+    #     """
+    #     @param hole_subcomplex:
+    #     @return:
+    #     """
+    #     vertices = [v for (v,) in hole_subcomplex.simplices[0]]
+    #     vertices.sort()
+    #     edges = [tuple(e) for e in combinations(vertices, 2)]
+    #     edge_lengths = {e: np.linalg.norm(self.coordinates[e[0]] - self.coordinates[e[1]]) for e in edges}
+    #     edge_type = {e: 0 if e in hole_subcomplex.simplices[1] else 1 for e in edges}
+    #
+    #     # print(vertices)
+    #
+    #     def get_signature(simplex):
+    #         root_part = []
+    #         root_types = []
+    #         patch_part = []
+    #         patch_types = []
+    #         for e in combinations(simplex, 2):
+    #             if edge_type[e] == 1:
+    #                 patch_part.append(edge_lengths[e])
+    #             else:
+    #                 root_part.append(edge_lengths[e])
+    #         # argsort_root = np.argsort(root_part)
+    #         # argsort_patch = np.argsort(patch_part)
+    #         # print(list(np.take(patch_part, argsort_patch)))
+    #         # print(list(np.take(root_part, argsort_root)))
+    #         # print(list(np.take(patch_part, argsort_patch)) + list(np.take(root_part, argsort_root)))
+    #         patch_part.sort(reverse=True)
+    #         root_part.sort(reverse=True)
+    #
+    #         return (len(simplex) - 1,
+    #                 # list(np.take(patch_part, argsort_patch)) + list(np.take(root_part, argsort_root)),
+    #                 patch_part + root_part,
+    #                 list(np.ones((len(patch_part),))) + list(np.zeros((len(root_part),)))
+    #                 )
+    #
+    #     def compare_signatures(s1, s2):
+    #         if s1[0] > s2[0]:
+    #             return 1
+    #         elif s1[0] < s2[0]:
+    #             return -1
+    #         else:
+    #             # if len(s1[2]) != len(s2[2]):
+    #             #     print('huh')
+    #             for i in range(len(s1)):
+    #                 if s1[2][i] > s2[2][i]:
+    #                     return 1
+    #                 elif s1[2][i] < s2[2][i]:
+    #                     return -1
+    #                 else:
+    #                     if s1[1][i] > s2[1][i]:
+    #                         return 1
+    #                     elif s1[1][i] < s2[1][i]:
+    #                         return -1
+    #         return 0
+    #
+    #     root = hole_subcomplex.simplices[0]
+    #     patch = []
+    #     signature = {}
+    #     for d in range(1, len(vertices)):
+    #         if d in hole_subcomplex.simplices:
+    #             for s in combinations(vertices, d + 1):
+    #                 signature[s] = get_signature(s)
+    #                 if s not in hole_subcomplex.simplices[d]:
+    #                     patch.append(s)
+    #                     # print(s, signature[s])
+    #                 else:
+    #                     root.append(s)
+    #         else:
+    #             for s in combinations(vertices, d + 1):
+    #                 patch.append(s)
+    #                 signature[s] = get_signature(s)
+    #                 print(s, signature[s])
+    #
+    #     def compare_simplices(s1, s2):
+    #         return compare_signatures(signature[s1], signature[s2])
+    #     queue = sorted(list(patch), key=functools.cmp_to_key(compare_simplices), reverse=True)
+    #     # print(queue)
+    #
+    #     flag = True
+    #     # while flag:
+    #     #     top_simplex = queue.pop()
+    #     #     print(top_simplex)
+    #     #     if
 
     def knitting_patching(self, hole_subcomplex):
         vertices = [v for (v,) in hole_subcomplex.simplices[0]]
