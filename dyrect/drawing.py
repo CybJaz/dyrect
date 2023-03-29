@@ -62,13 +62,17 @@ def draw_complex(complex, fig=None, ax=None, circles=False, dim=None, col='blue'
         vertices = np.array([complex.coordinates[v[0]] for v in complex.simplices[0]])
         # print(vertices)
         ax.scatter(vertices[:, 0], vertices[:, 1], vertices[:, 2], c=col, s=30)
+        # ax.scatter(vertices[:, 0], vertices[:, 1], vertices[:, 2], c=col, s=30)
         for edge in complex.simplices[1]:
             # print(edge)
-            verts = complex.coordinates[list(edge), :]
+            # verts = complex.coordinates[list(edge), :]
+            verts = np.array(complex.coords_list(list(edge)))
+
             ax.plot(verts[:, 0], verts[:, 1], verts[:, 2], c=col, linewidth=2)
 
         for tr in complex.simplices[2]:
-            verts = complex.coordinates[list(tr), :]
+            # verts = complex.coordinates[list(tr), :]
+            verts = np.array(complex.coords_list(list(tr)))
             # print(list(verts))
             t = ax.add_collection3d(Poly3DCollection([verts[:, :3]], color=col, alpha=alpha))
 

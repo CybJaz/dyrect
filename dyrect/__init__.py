@@ -8,3 +8,4 @@ from .reconstruction import TransitionMatrix, GeomTransitionMatrix, trans2prob, 
 from .poset import Poset
 
 from .witness_complex import WitnessComplex, PatchedWitnessComplex
+from .utils import all_triangles_intersection_test_2D, all_triangles_intersection_test_3D, is_convex_hull
