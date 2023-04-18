@@ -134,6 +134,24 @@ class Complex():
             obj._dim = min(max_dim, dimension)
         return obj
 
+    @classmethod
+    def from_simplex_tree(cls, st, points):
+        # obj = cls.__new__(cls)
+        simplices = dict()
+        max_dim = -1
+        for (s, _) in st.get_simplices():
+            dim = len(s) - 1
+            s.sort()
+            if dim not in simplices:
+                simplices[dim] = []
+            if dim > max_dim:
+                max_dim = dim
+            simplices[dim].append(tuple(s))
+        obj = cls(simplices, points, max_dim, len(points[0]))
+        return obj
+
+
+
     def add_simplex(self, simplex):
         d = len(simplex)-1
         if d not in self._simplices:
@@ -141,6 +159,12 @@ class Complex():
             self._dim = d
         self._simplices[d].append(simplex)
         self._st.insert(simplex)
+        self._betti_numbers = None
+
+    def remove_simplex(self, simplex):
+        d = len(simplex)-1
+        self._simplices[d].remove(tuple(simplex))
+        self._st.remove_maximal_simplex(list(simplex))
         self._betti_numbers = None
 
     def merge_complex(self, patch):
@@ -163,6 +187,12 @@ class Complex():
     @property
     def coordinates(self):
         return self._coordinates
+
+    @property
+    def vertices(self):
+        verts = [v for (v,) in self._simplices[0]]
+        verts.sort()
+        return verts
 
     @property
     def simplices(self):

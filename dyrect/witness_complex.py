@@ -8,8 +8,7 @@ from scipy.cluster.hierarchy import DisjointSet
 from scipy.spatial.distance import cdist
 
 from .epsilon_net import Complex
-from .utils import in_convex_hull
-
+from .cgal_utils import in_convex_hull
 
 class WitnessComplex(Complex):
     def __init__(self, landmarks, witnesses, max_dim, eps=-1):
@@ -138,13 +137,16 @@ class PatchedWitnessComplex(WitnessComplex):
         if eps > 0:
             print("WARNING: eps is not taken into the account during the patching yet")
 
+        count_continued = 0
         # Patched dimension
         # e.g. pd=2 is for closing 1-dim holes
-        for pd in range(2, max_patched_dimensions + 1):
+        # for pd in range(2, max_patched_dimensions + 1):
+        for pd in range(max_patched_dimensions, 1, -1):
             self._patched[pd] = []
             # e.g. cpd=1 uses 3-simplices for closing 1-holes
             # e.g. cpd=2 uses 4-simplices for closing 1-holes
             for cpd in range(1, patching_level + 1):
+            # for cpd in range(patching_level, patching_level + 1):
                 ### Number of vertices of the patching simplex
                 nvp = pd + cpd + 1
                 # extra_simplices = []
@@ -155,34 +157,43 @@ class PatchedWitnessComplex(WitnessComplex):
                     bwitnesses = self._barren_witnesses[pd]
                 for x in bwitnesses:
                     new_simplex = tuple(np.sort(argsort_dists[x, :nvp]))
+                    if new_simplex in self._patched[pd]:
+                        count_continued += 1
+                        continue
                     # if new_simplex in extra_simplices:
                     #     continue
 
                     hole_subcomplex = self.subcomplex(new_simplex)
+                    self.cycle_reduction(hole_subcomplex)
 
-                    reduced = False
-                    while not reduced:
-                        reduced = True
-                        if pd in hole_subcomplex.simplices and len(hole_subcomplex.simplices[pd])>0:
-                            for top_simplex in hole_subcomplex.simplices[pd]:
-                                for v in top_simplex:
-                                    cofaces = hole_subcomplex._st.get_cofaces([v], 0)
-                                    reducible = True
-                                    for (coface, _) in cofaces:
-                                        if not all([v in top_simplex for v in coface]):
-                                            reducible = False
-                                            break
-                                    if reducible:
-                                        new_simplex = tuple([x for x in new_simplex if x != v])
-                                        reduced = False
-                                        break
-                                    # cofaces = hole_subcomplex._st.get_cofaces([v], pd)
-                                    # if len(cofaces) == 1 and tuple(cofaces[0][0]) == top_simplex:
-                                    #     new_simplex = tuple([x for x in new_simplex if x != v])
-                                    #     reduced = False
-                                    #     continue
-                        if not reduced:
-                            hole_subcomplex = self.subcomplex(new_simplex)
+                    new_reduced_simplex = tuple(hole_subcomplex.vertices)
+                    if new_reduced_simplex in self._patched[pd] or len(new_reduced_simplex) == 1:
+                        count_continued += 1
+                        continue
+
+                    self._patched[pd].append(new_reduced_simplex)
+                    # if len(new_reduced_simplex) != len(new_simplex):
+                    #     self._patched[pd].append(new_simplex)
+
+                    # # OLD REDUCTIONS
+                    # reduced = False
+                    # while not reduced:
+                    #     reduced = True
+                    #     if pd in hole_subcomplex.simplices and len(hole_subcomplex.simplices[pd])>0:
+                    #         for top_simplex in hole_subcomplex.simplices[pd]:
+                    #             for v in top_simplex:
+                    #                 cofaces = hole_subcomplex._st.get_cofaces([v], 0)
+                    #                 reducible = True
+                    #                 for (coface, _) in cofaces:
+                    #                     if not all([v in top_simplex for v in coface]):
+                    #                         reducible = False
+                    #                         break
+                    #                 if reducible:
+                    #                     new_simplex = tuple([x for x in new_simplex if x != v])
+                    #                     reduced = False
+                    #                     break
+                    #     if not reduced:
+                    #         hole_subcomplex = self.subcomplex(new_simplex)
 
                     ### Check if new_simplex is a simple cycle
                     if len(hole_subcomplex._simplices[pd]) == 0:
@@ -195,20 +206,40 @@ class PatchedWitnessComplex(WitnessComplex):
                             # self.knitting_patching(hole_subcomplex)
                             # self.web_patching(hole_subcomplex)
                             self.fan_patching(hole_subcomplex)
-                            self._patched[pd].append(new_simplex)
+                            # self._patched[pd].append(new_simplex)
                             # self.morse_patching(hole_subcomplex)
                             self.merge_complex(hole_subcomplex)
+        print("Continued: " + str(count_continued))
+
+    def _simplex_distance(self, c, sim):
+        b = np.mean(self.coords_list(list(sim)), axis=0)
+        return np.linalg.norm(c - b)
+
+    def cycle_reduction(self, hole_subcomplex):
+        reduced = False
+        while not reduced:
+            c = np.mean(self.coords_list([v for (v,) in hole_subcomplex.simplices[0]]), axis=0)
+            reduced = True
+            reducible_pairs = []
+            weights = []
+            for (sim, _) in hole_subcomplex._st.get_simplices():
+                cofaces = hole_subcomplex._st.get_cofaces(sim, 1)
+                if len(cofaces)==1:
+                    reducible_pairs.append([sim, cofaces[0][0]])
+                    weights.append(self._simplex_distance(c, sim))
+            if len(reducible_pairs) > 0:
+                ri = np.argmax(weights)
+                hole_subcomplex.remove_simplex(reducible_pairs[ri][1])
+                hole_subcomplex.remove_simplex(reducible_pairs[ri][0])
+                reduced = False
+            # print(reducible_pairs)
+            # print(weights)
 
     def fan_patching(self, hole_subcomplex):
         vertices = [v for (v,) in hole_subcomplex.simplices[0]]
-        vertices.sort()
-
-        # if hole is not convex choose a point in the interior of the convex hull
-        v0 = in_convex_hull([self.coordinates[v] for v in vertices])
-        if v0 is not None:
-            v0 = vertices[v0]
-        else:
-            v0 = vertices[0]
+        b = np.mean(self.coords_list(vertices), axis=0)
+        weights = [np.linalg.norm(b - self.coordinates[v]) for v in vertices]
+        v0 = vertices[np.argmin(weights)]
 
         dims = list(hole_subcomplex.simplices.keys())
         dims.sort(reverse=True)
@@ -223,6 +254,32 @@ class PatchedWitnessComplex(WitnessComplex):
                 if new_simplex not in hole_subcomplex.simplices[d+1]:
                     hole_subcomplex.simplices[d+1].append(new_simplex)
         hole_subcomplex.simplices[0].append((v0,))
+
+
+    # def fan_patching(self, hole_subcomplex):
+    #     vertices = [v for (v,) in hole_subcomplex.simplices[0]]
+    #     vertices.sort()
+    #
+    #     # if hole is not convex choose a point in the interior of the convex hull
+    #     v0 = in_convex_hull([self.coordinates[v] for v in vertices])
+    #     if v0 is not None:
+    #         v0 = vertices[v0]
+    #     else:
+    #         v0 = vertices[0]
+    #
+    #     dims = list(hole_subcomplex.simplices.keys())
+    #     dims.sort(reverse=True)
+    #     hole_subcomplex.simplices[dims[0]+1] = []
+    #     for d in dims:
+    #         for s in hole_subcomplex.simplices[d]:
+    #             if v0 in s:
+    #                 continue
+    #             new_simplex = list(s) + [v0]
+    #             new_simplex.sort()
+    #             new_simplex = tuple(new_simplex)
+    #             if new_simplex not in hole_subcomplex.simplices[d+1]:
+    #                 hole_subcomplex.simplices[d+1].append(new_simplex)
+    #     hole_subcomplex.simplices[0].append((v0,))
 
     def web_patching(self, hole_subcomplex):
         vertices = [v for (v,) in hole_subcomplex.simplices[0]]

@@ -48,13 +48,14 @@ def draw_transition_graph(trans_mat, vert_coords, threshold=1.0, node_size=50, e
     return ax
 
 
-def draw_complex(complex, fig=None, ax=None, circles=False, dim=None, col='blue', alpha=0.4, vlabels=False):
+def draw_complex(complex, fig=None, ax=None, circles=False, dim=None, col='blue',
+                 alpha=0.4, vlabels=False):
     if fig == None or ax == None:
         fig = plt.figure(figsize=(10, 8))
         print(dim, complex._ambient_dim)
         if dim == 3 or complex._ambient_dim > 2:
             ax = fig.add_subplot(projection='3d')
-            ax.set_box_aspect((1.0, 1.0, 0.25))
+            # ax.set_box_aspect((1.0, 1.0, 0.25))
         else:
             ax = fig.add_subplot()
 
@@ -94,7 +95,7 @@ def draw_complex(complex, fig=None, ax=None, circles=False, dim=None, col='blue'
             for tr in complex.simplices[2]:
                 # verts = complex.coordinates[list(tr), :]
                 verts = np.array(complex.coords_list(list(tr)))
-                tr = plt.Polygon(verts[:, :2], alpha=0.5, color=col)
+                tr = plt.Polygon(verts[:, :2], alpha=0.3, color=col)
                 plt.gca().add_patch(tr)
             #     t = ax.add_collection3d(Poly3DCollection(verts))
 
@@ -105,6 +106,39 @@ def draw_complex(complex, fig=None, ax=None, circles=False, dim=None, col='blue'
 
     return fig, ax
 
+def draw_triangles_collection(triangles, coordinates, fig=None, ax=None, dim=2,
+                              vlabels=True):
+    if fig == None or ax == None:
+        fig = plt.figure(figsize=(10, 8))
+        if dim == 3:
+            ax = fig.add_subplot(projection='3d')
+        else:
+            ax = fig.add_subplot()
+
+    all_vertices = set()
+    for t in triangles:
+        all_vertices = all_vertices.union(t)
+    all_vertices = list(all_vertices)
+    vertices = np.array([coordinates[v] for v in all_vertices])
+    if dim == 3:
+        ax.scatter(vertices[:, 0], vertices[:, 1], vertices[:, 2], c='k', s=30)
+
+        for tr in triangles:
+            verts = np.array([coordinates[v] for v in tr])
+            t = ax.add_collection3d(Poly3DCollection([verts[:, :3]], color='blue', alpha=0.3))
+
+    else:
+        ax.scatter(vertices[:, 0], vertices[:, 1], c='k', s=30)
+
+        if vlabels:
+            for v in all_vertices:
+                ax.annotate(str(v), (coordinates[v][0], coordinates(v)[1]), fontsize=15)
+
+        for tr in triangles:
+            verts = np.array(coordinates[v] for v in tr)
+            tr = plt.Polygon(verts[:, :2], alpha=0.3, color='blue')
+            plt.gca().add_patch(tr)
+    return fig, ax
 
 def draw_planar_mvf(mvf, mode='crit', fig=None, ax=None, figsize=(10, 8)):
     """
