@@ -1,4 +1,5 @@
 from gudhi import SimplexTree
+import gudhi
 import numpy as np
 from scipy.cluster.hierarchy import DisjointSet
 from scipy.spatial.distance import cdist
@@ -13,7 +14,7 @@ def powerset(iterable):
     return chain.from_iterable(combinations(s, r) for r in range(1, len(s)+1))
 
 class EpsilonNet:
-    def __init__(self, eps, max_num_of_landmarks=0, dist=True, method='weighted_furthest'):
+    def __init__(self, eps, max_num_of_landmarks=0, dist=True, method='weighted'):
         """
         :param eps:
         :param max_num_of_landmarks:
@@ -37,19 +38,21 @@ class EpsilonNet:
         distance_to_landmarks = np.array([np.array(np.linalg.norm(X - self._landmarks[0], axis=1))])
         distance_to_cover = distance_to_landmarks[0]
         while self._nlandmarks < self._max_num_of_landmarks and np.max(distance_to_cover) >= self._eps:
-            if self._method == 'furthest_point':
+            if self._method == 'furthest':
                 furthest_point_idx = np.argmax(distance_to_cover)
-            elif self._method == 'weighted_furthest':
+            elif self._method == 'weighted':
                 distance_to_cover = [d if d >= self._eps else 0 for d in distance_to_cover]
                 weights = np.power(distance_to_cover / np.max(distance_to_cover), 2)
                 weights = weights / np.sum(weights)
                 furthest_point_idx = np.random.choice(range(nsamples), p=weights)
 
             self._landmarks = np.append(self._landmarks, [X[furthest_point_idx]], axis=0)
-            distance_to_landmarks = np.append(distance_to_landmarks,
-                                              [np.array(np.linalg.norm(X - self._landmarks[self._nlandmarks], axis=1))],
-                                              axis=0)
-            distance_to_cover = np.min(np.stack((distance_to_cover, distance_to_landmarks[-1])), axis=0)
+            distance_to_new_landmark = np.array(np.linalg.norm(X - self._landmarks[self._nlandmarks], axis=1))
+            distance_to_cover = np.min(np.stack((distance_to_cover, distance_to_new_landmark)), axis=0)
+            # distance_to_landmarks = np.append(distance_to_landmarks,
+            #                                   [np.array(np.linalg.norm(X - self._landmarks[self._nlandmarks], axis=1))],
+            #                                   axis=0)
+            # distance_to_cover = np.min(np.stack((distance_to_cover, distance_to_landmarks[-1])), axis=0)
             self._nlandmarks += 1
 
         return np.transpose(distance_to_landmarks)
@@ -309,6 +312,17 @@ class Complex():
             self._st.compute_persistence(persistence_dim_max=True)
             self._betti_numbers = self._st.betti_numbers()
         return self._st.betti_numbers()
+
+class AlphaComplex(Complex):
+
+    def __init__(self, lms):
+        alpha_complex = gudhi.AlphaComplex(points=lms)
+        stree = alpha_complex.create_simplex_tree()
+        simplices = {0:[], 1:[], 2:[]}
+        for (s, _) in stree.get_simplices():
+            simplices[len(s)-1].append(tuple(np.sort(s)))
+        # ac = dy.Complex(simplices=simplices, coords=lms)
+        super(AlphaComplex, self).__init__(simplices=simplices, coords=lms)
 
 class NerveComplex(Complex):
     def __init__(self, lms, eps, max_dim, points=[]):

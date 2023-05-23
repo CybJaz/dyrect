@@ -45,7 +45,7 @@ def draw_example(lms, points, eps, complex):
     plt.show()
 
 
-def draw_witnesses(lms, points, witness_complex, barrens=None):
+def draw_witnesses(lms, points, witness_complex, barrens=None, labels=True):
     fwidth = 10
     fig = plt.figure(figsize=(fwidth, fwidth))
 
@@ -53,7 +53,7 @@ def draw_witnesses(lms, points, witness_complex, barrens=None):
 
     if ambient_dim == 2:
         ax = plt.subplot()
-        draw_complex(witness_complex, fig=fig, ax=ax, vlabels=True)
+        draw_complex(witness_complex, fig=fig, ax=ax, vlabels=labels)
 
         if barrens is None:
             plt.scatter(points[:, 0], points[:, 1], s=3.5)
@@ -102,16 +102,33 @@ def nonconvex_six_hole_example():
     print("The hole is convex: " + str(is_convex_hull(lms)))
     all_triangles_intersection_test_2D(pwc)
 
-def simple_six_hole_example():
-    lms = np.array([[0., 1.], [1., 1.], [1., -0.5], [0., -1.], [-1., -0.5], [-1.5, 0.5]])
-    points = np.array([lms[np.mod(i,6)]/2+lms[np.mod(i+1, 6)]/2 for i in range(7)])
-    extra_points = np.array([-.5, .25])
-    points = np.vstack((lms, points, extra_points))
+def simple_five_hole_example():
+    lms = np.array([[0., 1.], [1., 1.], [1., -0.5], [0., -1.], [-1., -0.5]])
+    points = np.array([lms[np.mod(i,5)]/2+lms[np.mod(i+1, 5)]/2 for i in range(6)])
+    points = np.vstack((lms, points))
+    # extra_points = np.array([-.5, .25])
+    # points = np.vstack((lms, points, extra_points))
     # print(points)
 
     eps = 0.8
     # wc = WitnessComplex(lms, points, 2, eps)
     # wc = WitnessComplex(lms, points, 2)
+    # draw_example(lms, points, eps, wc)
+    pwc = PatchedWitnessComplex(lms, points, 2, patching_level=2)
+    draw_example(lms, points, eps, pwc)
+
+def simple_six_hole_example():
+    lms = np.array([[0., 1.], [1., 1.], [1., -0.5], [0., -1.], [-1., -0.5], [-1.5, 0.5]])
+    points = np.array([lms[np.mod(i,6)]/2+lms[np.mod(i+1, 6)]/2 for i in range(7)])
+    points = np.vstack((lms, points))
+    # extra_points = np.array([-.5, .25])
+    # points = np.vstack((lms, points, extra_points))
+    # print(points)
+
+    eps = 0.8
+    # wc = WitnessComplex(lms, points, 2, eps)
+    # wc = WitnessComplex(lms, points, 2)
+    # draw_example(lms, points, eps, wc)
     pwc = PatchedWitnessComplex(lms, points, 2, patching_level=3)
     draw_example(lms, points, eps, pwc)
 
@@ -151,10 +168,10 @@ def simple_3d_hole_example():
 
 def unit_square_example():
     stats = []
-    npoints = 50000
+    npoints = 12500
 
     seeds = range(50)
-    seeds = [24]
+    seeds = [0]
     for seed in seeds:
         print("Seed: " + str(seed))
         np.random.seed(seed)
@@ -163,7 +180,7 @@ def unit_square_example():
         # eps=0.25
 
         points = np.random.random((npoints, 2))
-        eps=0.05
+        eps=0.025
         # eps=0.18
         EN = EpsilonNet(eps, 0)
         EN.fit(points)
@@ -185,11 +202,12 @@ def unit_square_example():
 
         # dc = dy.Delaunay2d_complex(lms)
         wc = WitnessComplex(lms, points, 2)
-        pwc = PatchedWitnessComplex(lms, points, 2, patching_level=2)
+        pwc = PatchedWitnessComplex(lms, points, 2, patching_level=5)
         # draw_witnesses(lms, points, wc, barrens=2)
         # draw_witnesses(lms, points, wc, barrens=2)
-        draw_witnesses(lms, points, pwc)
-        draw_witnesses(lms, points, wc)
+
+        # draw_witnesses(lms, points, wc)
+        draw_witnesses(lms, points, pwc, labels=False)
         # draw_witnesses(lms, points, pwc)
 
         # areax = [0.00, 0.25]
@@ -322,9 +340,10 @@ def unit_cube_example():
 
 def torus_example():
     stats = []
-    npoints = 3000
+    npoints = 10000
+    noise = 0.15
 
-    patching_level = 4
+    patching_level = 2
     # seeds = range(50)
     seeds = [40]
     for seed in seeds:
@@ -332,6 +351,9 @@ def torus_example():
         np.random.seed(seed)
 
         points = dy.torus_sample(npoints, .35)
+        random_noise = np.random.random_sample(points.shape) * noise
+        points = points + random_noise
+
         eps=0.25
         EN = EpsilonNet(eps, 0)
         EN.fit(points)
@@ -339,7 +361,7 @@ def torus_example():
         print("EN done")
 
         wc = WitnessComplex(lms, points, 2)
-        pwc2 = PatchedWitnessComplex(lms, points, 2, patching_level=patching_level)
+        pwc2 = PatchedWitnessComplex(lms, points, 3, patching_level=patching_level)
         # pwc3 = PatchedWitnessComplex(lms, points, 3, patching_level=5, max_patched_dimensions=3)
         draw_example(lms, points, eps, wc)
         draw_example(lms, points, eps, pwc2)
@@ -413,11 +435,13 @@ def lorenz_example():
 # cgal_2D_intersections_test()
 # cgal_2D_convexity_test()
 
+# simple_five_hole_example()
 # simple_six_hole_example()
 # simple_four_hole_example()
 # nonconvex_six_hole_example()
 # flat_six_hole_example()
 unit_square_example()
+# torus_example()
 
 # simple_3d_hole_example()
 # unit_cube_example()

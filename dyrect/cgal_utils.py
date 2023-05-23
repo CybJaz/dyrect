@@ -1,6 +1,7 @@
 from CGAL.CGAL_Kernel import Point_2, Point_3, Triangle_2, Triangle_3, Segment_2, Segment_3, do_intersect
 from CGAL import CGAL_Convex_hull_2
 from CGAL.CGAL_Triangulation_2 import Delaunay_triangulation_2
+from CGAL.CGAL_Triangulation_3 import Delaunay_triangulation_3
 from CGAL.CGAL_AABB_tree import AABB_tree_Triangle_3_soup
 
 
@@ -10,7 +11,7 @@ from scipy.spatial.distance import cdist
 import numpy as np
 from .drawing import draw_complex
 
-from .epsilon_net import Complex
+from .complex import Complex
 from gudhi import SimplexTree
 
 # def cgal_2D_convexity_test():
@@ -68,6 +69,8 @@ from gudhi import SimplexTree
 
 def p2tuple(point):
     return (point.x(), point.y())
+def p3tuple(point):
+    return (point.x(), point.y(), point.z())
 
 class Delaunay2d_complex(Complex):
     def __init__(self, landmarks):
@@ -93,6 +96,39 @@ class Delaunay2d_complex(Complex):
         for tr in dt.finite_faces():
             face = dt.triangle(tr)
             idx_face = [p2id[p2tuple(face.vertex(i))] for i in [0, 1, 2]]
+            idx_face.sort()
+            self._simplices[2].append(tuple(idx_face))
+
+        for d in self._simplices:
+            for s in self._simplices[d]:
+                self._st.insert(s)
+        self._st.compute_persistence(persistence_dim_max=True)
+        self._betti_numbers = self._st.betti_numbers()
+
+class Delaunay3d_complex(Complex):
+    def __init__(self, landmarks):
+        self._st= SimplexTree()
+        self._simplices = dict()
+        self._ambient_dim = 3
+        self._coordinates = {idx: coord[:3] for idx, coord in enumerate(landmarks)}
+
+        p2id = {(x, y, z): i for i, [x, y, z] in enumerate(landmarks)}
+        dt = Delaunay_triangulation_3()
+        cgal_points = [Point_3(*cc) for cc in landmarks]
+        dt.insert(cgal_points)
+
+        self._simplices[0] = [(v,) for v in range(len(landmarks))]
+        self._simplices[1] = []
+        self._simplices[2] = []
+
+        for edge in dt.finite_edges():
+            segment = dt.segment(edge)
+            idx_edge = [p2id[p3tuple(segment.source())], p2id[p3tuple(segment.target())]]
+            idx_edge.sort()
+            self._simplices[1].append(tuple(idx_edge))
+        for tr in dt.finite_facets():
+            face = dt.triangle(tr)
+            idx_face = [p2id[p3tuple(face.vertex(i))] for i in [0, 1, 2]]
             idx_face.sort()
             self._simplices[2].append(tuple(idx_face))
 
@@ -173,6 +209,7 @@ def all_triangles_intersection_test_3D(complex):
     points = []
     triangles = []
     for v in complex.coordinates.values():
+        # print(v)
         points.append(Point_3(v[0], v[1], v[2]))
     for tr in complex.simplices[2]:
         (v0, v1, v2) = tr
@@ -207,7 +244,8 @@ def all_triangles_intersection_test_3D(complex):
     return intersecting_pairs
 
 
-def draw_voronoi_cells_2d(lms, order=0, areax=[0, 1], areay=[0,1], resolution=10, complex=None):
+def draw_voronoi_cells_2d(lms, order=1, areax=[0, 1], areay=[0,1], resolution=10,
+                          complex=None, labels=True, fig=None, ax=None):
     fwidth = 10
     # fig = plt.figure(figsize=(fwidth, fwidth*0.4))
     # rows = 1
@@ -223,11 +261,11 @@ def draw_voronoi_cells_2d(lms, order=0, areax=[0, 1], areay=[0,1], resolution=10
     def get_points_of_interest(verts, dim):
         sim_wareas = dict()
         sim_witnesses = dict()
-        for sim in combinations(verts, dim + 1):
+        for sim in combinations(verts, dim):
             sim_wareas[tuple(np.sort(sim))] = []
             sim_witnesses[tuple(np.sort(sim))] = []
         for x_arg_sorted, x in zip(np.argsort(grid_dists, axis=1), range(len(xy))):
-            wit_sim = tuple(np.sort(x_arg_sorted[:dim + 1]))
+            wit_sim = tuple(np.sort(x_arg_sorted[:dim]))
             if wit_sim in sim_wareas:
                 sim_wareas[wit_sim].append(x)
         # for x_arg_sorted, x in zip(np.argsort(points_dists, axis=1), range(len(points))):
@@ -236,15 +274,16 @@ def draw_voronoi_cells_2d(lms, order=0, areax=[0, 1], areay=[0,1], resolution=10
         #         sim_witnesses[wit_sim].append(x)
         return sim_wareas, sim_witnesses
 
-    fig = plt.figure(figsize=(fwidth, fwidth))
-    ax = plt.subplot()
+    if (fig is None) or (ax is None):
+        fig = plt.figure(figsize=(fwidth, fwidth))
+        ax = plt.subplot()
     sim_wareas, sim_witnesses = get_points_of_interest(range(len(lms)), order)
 
     empty_keys = [key for key in sim_wareas.keys() if len(sim_wareas[key]) == 0]
     for key in empty_keys:
         sim_wareas.pop(key)
     if complex is not None:
-        not_in_complex = [key for key in sim_wareas.keys() if key not in complex.simplices[order]]
+        not_in_complex = [key for key in sim_wareas.keys() if key not in complex.simplices[order-1]]
     # print(not_in_complex)
 
     cm = plt.cm.get_cmap('nipy_spectral')(np.linspace(0.05, 1, len(sim_wareas), endpoint=False))
@@ -266,11 +305,12 @@ def draw_voronoi_cells_2d(lms, order=0, areax=[0, 1], areay=[0,1], resolution=10
     ax.scatter(lms[:, 0], lms[:, 1], color='k', s=10.5)
     # ax.scatter(points[:, 0], points[:, 1], color='k', s=0.5)
     ax.set_aspect('equal')
-    for v in range(len(lms)):
-        ax.annotate(str(v), (lms[v, 0], lms[v, 1]), fontsize=15, bbox=dict(boxstyle="round4", fc="w"))
-    legend = ax.legend(loc='right', bbox_to_anchor=(1.15, 0.5))
-    for i in range(len(legend.legendHandles)):
-        legend.legendHandles[i]._sizes = [30]
+    if labels:
+        for v in range(len(lms)):
+            ax.annotate(str(v), (lms[v, 0], lms[v, 1]), fontsize=15, bbox=dict(boxstyle="round4", fc="w"))
+            legend = ax.legend(loc='right', bbox_to_anchor=(1.15, 0.5))
+        for i in range(len(legend.legendHandles)):
+            legend.legendHandles[i]._sizes = [30]
     plt.title(str(order) + "-Voronoi cells")
     plt.xlim(areax)
     plt.ylim(areay)

@@ -1,5 +1,5 @@
 from .poset import Poset
-from .epsilon_net import Complex
+from .complex import Complex
 from gudhi import SimplexTree
 from disjoint_set import DisjointSet
 from itertools import combinations
