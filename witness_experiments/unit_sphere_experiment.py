@@ -22,7 +22,7 @@ def make_default_example(npoints = 10000, make_witness=True):
     points = np.random.random((npoints, 3)) - 0.5
     points = points / np.expand_dims(np.linalg.norm(points, axis=1), axis=1)
 
-    eps = 0.025
+    eps = 0.15
     EN = EpsilonNet(eps, 0, method='furthest')
     EN.fit(points)
     lms = EN.landmarks
@@ -55,4 +55,32 @@ def unit_sphere_example():
     draw_complex(pwc)
     plt.show()
 
-unit_sphere_example()
+def clique_complex_experiment():
+    points, lms, wc = make_default_example(14000)
+    ecwc = dy.EdgeCliqueWitnessComplex(lms, points, 2, max_cliques_dim=100)
+    # pwc = PatchedWitnessComplex(lms, points, max_dim=2, max_patched_dimensions=2, patching_level=3)
+
+    print("WC: ", wc.betti_numbers)
+    # print("PWC: ", pwc.betti_numbers)
+    print("ECWC: ", ecwc.betti_numbers)
+    # ecwc.barrens_patching(points, 2, level=3)
+    level = 4
+    for i in range(1):
+        print(i, " patching")
+        ecwc.barrens_patching(points, 2, level=level)
+        # ecwc.voted_barrens_patching(points, 2, level=level)
+        print("ECWCp: ", ecwc.betti_numbers)
+
+    # ecwc.voted_barrens_patching(points, 2, level=3)
+    # ecwc.barrens_patching(points, 2, level=1)
+    # print(ecwc.betti_numbers)
+    # ecwc.barrens_patching(points, 2, level=2)
+    # print(ecwc.betti_numbers)
+    draw_complex(wc)
+    fig, ax = draw_complex(ecwc)
+    ax.scatter(points[:, 0], points[:, 1], points[:, 2], s=0.1)
+    plt.show()
+
+
+clique_complex_experiment()
+# unit_sphere_example()

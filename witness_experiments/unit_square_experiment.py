@@ -131,7 +131,7 @@ def unit_square_barren_witnesses_example():
     ax = plt.subplot()
     dy.draw_voronoi_cells_2d(lms, fig=fig, ax=ax, order=k, resolution=1000)
                              # labels=True,  areax=[0.55,0.8], areay=[0.2, 0.48])
-    draw_complex(ac, fig=fig, ax=ax)
+    draw_complex(wc, fig=fig, ax=ax)
 
     plt.scatter(innately_barren[:, 0], innately_barren[:, 1], s=3.5)
     plt.scatter(incidentally_barren[:, 0], incidentally_barren[:, 1], s=3.5)

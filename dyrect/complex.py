@@ -192,6 +192,10 @@ class Complex():
         return self._coordinates
 
     @property
+    def coordinates_list(self):
+        return np.array(self._coordinates.values())
+
+    @property
     def vertices(self):
         verts = [v for (v,) in self._simplices[0]]
         verts.sort()

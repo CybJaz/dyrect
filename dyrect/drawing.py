@@ -3,6 +3,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from scipy.spatial.distance import cdist
 
 
 def draw_transition_graph(trans_mat, vert_coords, threshold=1.0, node_size=50, edge_size=10, fig=None, ax=None,
@@ -47,9 +48,8 @@ def draw_transition_graph(trans_mat, vert_coords, threshold=1.0, node_size=50, e
 
     return ax
 
-
 def draw_complex(complex, fig=None, ax=None, circles=False, dim=None, col='blue',
-                 alpha=0.4, vlabels=False):
+                 alpha=0.4, vlabels=False, vlabelssize=15):
     if fig == None or ax == None:
         fig = plt.figure(figsize=(10, 8))
         print(dim, complex._ambient_dim)
@@ -84,25 +84,68 @@ def draw_complex(complex, fig=None, ax=None, circles=False, dim=None, col='blue'
         if vlabels:
             for v in complex.simplices[0]:
                 # ax.annotate(str(v[0]), (complex.coordinates[v[0], 0], complex.coordinates[v[0], 1]), fontsize=15)
-                ax.annotate(str(v[0]), (complex.coords_of(v[0])[0], complex.coords_of(v[0])[1]), fontsize=15)
+                ax.annotate(str(v[0]), (complex.coords_of(v[0])[0], complex.coords_of(v[0])[1]), fontsize=vlabelssize)
 
         for edge in complex.simplices[1]:
             # verts = complex.coordinates[list(edge), :]
             verts = np.array(complex.coords_list(list(edge)))
-            ax.plot(verts[:, 0], verts[:, 1], c=col, linewidth=2)
+            ax.plot(verts[:, 0], verts[:, 1], c=col, linewidth=1)
 
         if 2 in complex.simplices:
             for tr in complex.simplices[2]:
                 # verts = complex.coordinates[list(tr), :]
                 verts = np.array(complex.coords_list(list(tr)))
                 tr = plt.Polygon(verts[:, :2], alpha=0.3, color=col)
-                plt.gca().add_patch(tr)
+                ax.add_patch(tr)
+                # plt.gca().add_patch(tr)
             #     t = ax.add_collection3d(Poly3DCollection(verts))
 
         if circles:
             for (v) in complex.simplices[0]:
                 crc = plt.Circle(complex.coordinates[v], complex.epsilon, color='r', alpha=0.1)
                 ax.add_patch(crc)
+
+    return fig, ax
+
+def draw_barren_witnesses(wc, points=[], ac=None, fig=None, ax=None, order=2):
+    """
+
+    @param wc: witness complex
+    @param points: list of all witnesses
+    @param ac: alpha/Delaunay complex
+    @param fig:
+    @param ax:
+    @param order:
+    @return:
+    """
+
+    if fig is None or ax is None:
+        fwidth = 10
+        fig = plt.figure(figsize=(fwidth, fwidth))
+        ax = plt.subplot()
+
+    if ac is None:
+        barren_witnesses = np.array([points[i] for i in wc._barren_witnesses[order]])
+        ax.scatter(barren_witnesses[:, 0], barren_witnesses[:, 1], s=3.)
+    else:
+        lms = wc.coordinates_list
+        distances = cdist(points, lms, 'euclidean')
+        argsort_dists = np.argsort(distances, axis=1)
+        distances.sort(axis=1)
+
+        innately_barren = []
+        incidentally_barren = []
+        for i in wc._barren_witnesses[order]:
+            bsimplex = tuple(np.sort(argsort_dists[i, :(order+1)]))
+            if bsimplex in ac.simplices[order]:
+                incidentally_barren.append(points[i])
+            else:
+                innately_barren.append(points[i])
+        innately_barren = np.array(innately_barren)
+        incidentally_barren = np.array(incidentally_barren)
+
+        ax.scatter(innately_barren[:, 0], innately_barren[:, 1], s=3.5)
+        ax.scatter(incidentally_barren[:, 0], incidentally_barren[:, 1], s=3.5)
 
     return fig, ax
 

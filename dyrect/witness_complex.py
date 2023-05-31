@@ -1,8 +1,10 @@
 import functools
+import itertools
 import sys
 from typing import List, Any
 
 import numpy as np
+import networkx as nx
 from gudhi import SimplexTree
 from itertools import chain, combinations
 from scipy.cluster.hierarchy import DisjointSet
@@ -185,6 +187,242 @@ class WitnessComplex(Complex):
         # argsort_dists = np.argsort(distances, axis=1)
         return argsort_dists
 
+    def barren_witnesses(self, points, dim, indices=False):
+        barrens = []
+        ibarrens = []
+        argsort_dists = self._argsort_distances(points)
+        for ip, p in enumerate(points):
+            wsim = argsort_dists[ip, :dim+1]
+            wsim.sort()
+            if tuple(wsim) not in self._simplices[dim]:
+                barrens.append(p)
+                ibarrens.append(ip)
+        if indices:
+            return np.array(ibarrens)
+        else:
+            return np.array(barrens)
+
+
+class EdgeCliqueWitnessComplex(WitnessComplex):
+    def __init__(self, landmarks, witnesses, witnesses_dim, max_cliques_dim=100, max_complex_dimension=-1):
+        """
+        @param landmarks:
+        @param witnesses:
+        @param max_dim:
+        @param all_cliques: if True, include all cliques as simplices, otherwise ignore cliques correspondig to higher
+                dimensional simplices
+        """
+        self._st = SimplexTree()
+        self._simplices = dict()
+        if max_complex_dimension >= 0:
+            self._dim = max_complex_dimension
+        else:
+            self._dim = witnesses_dim
+        self._betti_numbers = None
+
+        if type(landmarks) == dict:
+            self._coordinates = landmarks
+            self._ambient_dim = len(list(landmarks.values()[0]))
+        else:
+            self._ambient_dim = landmarks.shape[1]
+            self._coordinates = {idx: coord for idx, coord in enumerate(landmarks)}
+
+        print("simplices: ", np.sum([len(d) for d in self._simplices.values()]))
+        argsort_dists = self._argsort_distances(witnesses)
+
+        for d in range(self._dim+1):
+            self._simplices[d] = []
+        for i in range(len(witnesses)):
+            simplex = (argsort_dists[i, 0],)
+            if simplex not in self._simplices[0]:
+                self._simplices[0].append(simplex)
+                self._st.insert(list(simplex))
+
+        self._vmatrix = VMatrix(len(self._coordinates))
+        for iw in range(len(witnesses)):
+            # for d in range(1, self._dim+1):
+            dsim = argsort_dists[iw, :(witnesses_dim+1)]
+            self._vmatrix.add_directed_simplex(dsim)
+        g = nx.from_numpy_matrix(self._vmatrix.uni_vmatrix)
+        for clique in nx.find_cliques(g):
+            ds = len(clique) - 1
+            clique.sort()
+            if ds > 0 and ds <= max_cliques_dim:
+                if ds not in self._simplices:
+                    self._simplices[ds] = []
+                if max_complex_dimension < 0:
+                    dim_range = range(1, ds+1)
+                else:
+                    dim_range = range(1, self._dim+1)
+                # self._simplices[ds].append(tuple(clique))
+                for fd in dim_range:
+                    for face in itertools.combinations(clique, fd+1):
+                        fsim = tuple(face)
+                        if fsim not in self._simplices[fd]:
+                            self._simplices[fd].append(fsim)
+                            self._st.insert(list(fsim))
+            # elif ds > self._dim:
+
+    def barrens_patching(self, points, dim, level=1, over=0):
+        barren_witnesses = self.barren_witnesses(points, dim)
+        argsort_dists = self._argsort_distances(barren_witnesses)
+
+        self._vmatrix = VMatrix(len(self._coordinates))
+        for iw in range(len(barren_witnesses)):
+            dsim = argsort_dists[iw, :(self._dim+1+level)]
+            self._vmatrix.add_directed_simplex(dsim)
+        g = nx.from_numpy_matrix(self._vmatrix.uni_vmatrix)
+        for clique in nx.find_cliques(g):
+            ds = len(clique) - 1
+            clique.sort()
+            if ds not in self._simplices:
+                nd = ds
+                while nd not in self._simplices:
+                    self._simplices[nd] = []
+                    nd -= 1
+            if ds >= dim:
+                # print(clique)
+                # if ds <= self._dim:
+                #     self._simplices[ds].append(tuple(clique))
+                for fd in range(1, ds+1):
+                    for face in itertools.combinations(clique, fd+1):
+                        fsim = tuple(face)
+                        if fsim not in self._simplices[fd]:
+                            self._simplices[fd].append(fsim)
+        self._st = None
+        self._betti_numbers = None
+
+    def voted_barrens_patching(self, points, dim, level=1, over=0):
+        barren_witnesses = self.barren_witnesses(points, dim)
+        argsort_dists = self._argsort_distances(barren_witnesses)
+
+        self._vmatrix = VMatrix(len(self._coordinates))
+        for iw in range(len(barren_witnesses)):
+            dsim = argsort_dists[iw, :(self._dim+1+level)]
+            self._vmatrix.add_directed_simplex(dsim)
+        univ = self._vmatrix.uni_vmatrix
+        g = nx.from_numpy_matrix(univ)
+
+        for clique in nx.find_cliques(g):
+            ds = len(clique) - 1
+            clique.sort()
+            if ds >= dim:
+                for fd in range(ds, dim-1, -1):
+                    for face in itertools.combinations(clique, fd+1):
+                        # print(face)
+                        subcomplex = self.subcomplex(face)
+                        if is_simple_cycle(subcomplex, dim-1):
+                            new_simplices = []
+                            weights = []
+                            for edge in list(itertools.combinations(face, dim)):
+                                if tuple(edge) not in self._simplices[dim-1]:
+                                    new_simplices.append(tuple(edge))
+                                    weights.append(univ[edge[0], edge[1]])
+                            if len(weights) == 0:
+                                self.add_clique(face)
+                            else:
+                                medge = np.argmax(weights)
+                                self.add_clique(new_simplices[medge])
+
+            # for fd in range(1, ds+1):
+                #     for face in itertools.combinations(clique, fd+1):
+                #         fsim = tuple(face)
+                #         if fsim not in self._simplices[fd]:
+                #             self._simplices[fd].append(fsim)
+        self._betti_numbers = None
+
+    def add_clique(self, clique):
+        csim = np.sort(clique)
+        clen = len(clique)
+        if clen-1 not in self._simplices:
+            self._simplices[clen-1] = []
+        for fd in range(clen):
+            for face in itertools.combinations(clique, fd + 1):
+                fsim = tuple(face)
+                if fsim not in self._simplices[fd]:
+                    self._simplices[fd].append(fsim)
+                    self._st.insert(list(fsim))
+                    # print(fsim)
+
+
+def is_simple_cycle(complex, dim):
+    if (dim+1) in complex.simplices and len(complex.simplices[dim+1]) > 0:
+        return False
+
+    num_of_cofaces = {i: 0 for i in complex._simplices[dim-1]}
+    for s in complex._simplices[dim]:
+        for face in combinations(s, dim):
+            num_of_cofaces[face] += 1
+
+    if all(np.array(list(num_of_cofaces.values())) == 2):
+        return True
+    else:
+        return False
+
+
+class VMatrix():
+    def __init__(self, n):
+        self._n = n
+        i16 = np.iinfo(np.int16)
+        # self._vmatrix = np.diag([i16.max for _ in range(self._n)])
+        self._vmatrix = np.zeros((self._n, self._n))
+
+    def add_directed_simplex(self, dsimplex):
+        """
+        increase counter for directed edges of the form (dsimplex[0], dsimplex[v]), v>0
+        @param dsimplex: a directed simplex, aka. a sorted tuple/array
+        @return:
+        """
+        v0 = dsimplex[0]
+        for v in dsimplex[1:]:
+            self._vmatrix[v0, v] += 1
+
+    def at(self, x, y):
+        return self._vmatrix[x, y]
+
+    @property
+    def uni_vmatrix(self):
+        umatrix = np.zeros((self._n, self._n))
+        for i in range(self._n):
+            for j in range(self._n):
+                if self._vmatrix[i, j] != 0 and self._vmatrix[j, i] != 0:
+                    v = min(self._vmatrix[i, j], self._vmatrix[j, i])
+                    umatrix[i, j] = v
+                    umatrix[j, i] = v
+        return umatrix
+
+
+class EdgeCliqueSimplex():
+    def __init__(self, simplex):
+        self._n = len(simplex)
+        self._dim = self._n - 1
+        self._simplex = tuple(np.sort(simplex))
+        self._dedges = {de: 0 for de in itertools.permutations(simplex, 2)}
+        i16 = np.iinfo(np.int16)
+        self._vmatrix = np.diag([i16.max for _ in range(self._n)])
+
+    @property
+    def simplex(self):
+        return self._simplex
+
+    def add_directed_simplex(self, dsimplex):
+        """
+        increase counter for directed edges of the form (dsimplex[0], dsimplex[v]), v>0
+        @param dsimplex: a directed simplex, aka. a sorted tuple/array
+        @return:
+        """
+        v0 = dsimplex[0]
+        for v in dsimplex[1:]:
+            self._dedges[(v0, v)] += 1
+
+    def is_clique(self):
+        if np.min(list(self._dedges.values())) > 0:
+            return True
+        else:
+            return False
+
+
+
 class VWitnessComplex(WitnessComplex):
     def __init__(self, landmarks, witnesses, max_dim, alpha=-1, v=[0]):
         """
@@ -269,6 +507,8 @@ class VWitnessComplex(WitnessComplex):
                                 break
                         if well_witnessed and simplex not in self._simplices[d]:
                             self._simplices[d].append(simplex)
+
+
 
 class PatchedWitnessComplex(WitnessComplex):
     def __init__(self, landmarks, witnesses, max_dim, alpha=-1,
