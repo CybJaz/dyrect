@@ -238,30 +238,33 @@ class EdgeCliqueWitnessComplex(WitnessComplex):
                 self._simplices[0].append(simplex)
                 self._st.insert(list(simplex))
 
-        self._vmatrix = VMatrix(len(self._coordinates))
-        for iw in range(len(witnesses)):
-            # for d in range(1, self._dim+1):
-            dsim = argsort_dists[iw, :(witnesses_dim+1)]
-            self._vmatrix.add_directed_simplex(dsim)
-        g = nx.from_numpy_matrix(self._vmatrix.uni_vmatrix)
-        for clique in nx.find_cliques(g):
-            ds = len(clique) - 1
-            clique.sort()
-            if ds > 0 and ds <= max_cliques_dim:
-                if ds not in self._simplices:
-                    self._simplices[ds] = []
-                if max_complex_dimension < 0:
-                    dim_range = range(1, ds+1)
-                else:
-                    dim_range = range(1, self._dim+1)
-                # self._simplices[ds].append(tuple(clique))
-                for fd in dim_range:
-                    for face in itertools.combinations(clique, fd+1):
-                        fsim = tuple(face)
-                        if fsim not in self._simplices[fd]:
-                            self._simplices[fd].append(fsim)
-                            self._st.insert(list(fsim))
-            # elif ds > self._dim:
+        self._vmatrices = dict()
+
+        for wd in range(1, witnesses_dim+1):
+            self._vmatrices[wd] = VMatrix(len(self._coordinates))
+            for iw in range(len(witnesses)):
+                # for d in range(1, self._dim+1):
+                dsim = argsort_dists[iw, :(wd+1)]
+                self._vmatrices[wd].add_directed_simplex(dsim)
+            g = nx.from_numpy_matrix(self._vmatrices[wd].uni_vmatrix)
+            for clique in nx.find_cliques(g):
+                ds = len(clique) - 1
+                clique.sort()
+                if ds > 0 and ds <= max_cliques_dim:
+                    if ds not in self._simplices:
+                        self._simplices[ds] = []
+                    if max_complex_dimension < 0:
+                        dim_range = range(1, ds+1)
+                    else:
+                        dim_range = range(1, self._dim+1)
+                    # self._simplices[ds].append(tuple(clique))
+                    for fd in dim_range:
+                        for face in itertools.combinations(clique, fd+1):
+                            fsim = tuple(face)
+                            if fsim not in self._simplices[fd]:
+                                self._simplices[fd].append(fsim)
+                                self._st.insert(list(fsim))
+                # elif ds > self._dim:
 
     def barrens_patching(self, points, dim, level=1, over=0):
         barren_witnesses = self.barren_witnesses(points, dim)

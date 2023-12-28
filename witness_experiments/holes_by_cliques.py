@@ -40,7 +40,7 @@ def draw_witnesses(lms, points, witness_complex=None, barrens=None, vlabels=True
         ax.set_title(title)
     # plt.show()
 
-def draw_directed_graph(lms, witness_matrix, vlabels=True, elabels=False, threshold=0):
+def draw_directed_graph(lms, witness_matrix, vlabels=True, elabels=False, threshold=0, title=None):
     fwidth = 10
     fig = plt.figure(figsize=(fwidth, fwidth))
     ambient_dim = lms.shape[1]
@@ -71,7 +71,25 @@ def draw_directed_graph(lms, witness_matrix, vlabels=True, elabels=False, thresh
                         ((0.3 * lms[i, 0] + 0.7 * lms[j, 0]),
                          (0.3 * lms[i, 1] + 0.7 * lms[j, 1])),
                         fontsize=7)
+    if title is not None:
+        ax.set_title(title)
 
+def make_ring_example(npoints=5000, eps=0.1, seed=0, resample=None, noise=0.01):
+    print("##########################################################")
+    print("Seed: " + str(seed) + "\t Set size: " + str(npoints))
+    np.random.seed(seed)
+    points = dy.unit_circle_sample(npoints, noise=noise)
+    EN = EpsilonNet(eps, 0)
+    EN.fit(points)
+    lms = EN.landmarks
+    print("EN done; num of landmarks: ", len(lms))
+
+    if resample is not None:
+        np.random.seed(seed+1)
+        points = dy.unit_circle_sample(resample, noise=noise)
+
+    wc = WitnessComplex(lms, points, 2)
+    return points, lms, wc
 
 def make_default_example(npoints=5000, eps=0.1, seed=0, resample=None):
     # npoints = 8500
@@ -84,11 +102,10 @@ def make_default_example(npoints=5000, eps=0.1, seed=0, resample=None):
     print("Seed: " + str(seed) + "\t Set size: " + str(npoints))
     np.random.seed(seed)
     points = np.random.random((npoints, 2))
-    # points = dy.unit_circle_sample(npoints, noise=0.4)
+    # points = dy.unit_circle_sample(npoints, noise=0.8)
     EN = EpsilonNet(eps, 0)
     EN.fit(points)
     lms = EN.landmarks
-    # lms = np.vstack((lms, np.array([[0.1, 0.0]])))
     print("EN done; num of landmarks: ", len(lms))
 
     if resample is not None:
@@ -135,18 +152,26 @@ def edge_clique_witness_example():
     plt.show()
 
 def barrens_cliques():
-    points, lms, wc = make_default_example(25000)
+    # points, lms, wc = make_default_example(15000)
     ### przypadek witness nie rowny clique-witness
     # points, lms, wc = make_default_example(8500, 0.07, 15)
     ### przypadek clique-witness nie jest pokompleksem Delauney'a
     # points, lms, wc = make_default_example(3000, 0.1, 0, resample=8000)
 
-    # points, lms, wc = make_default_example(12000, 0.075, 0)
+    # points, lms, wc = make_default_example(5000, 0.075, 0, resample=8000)
+    # points, lms, wc = make_default_example(5000, 0.075, 0, resample=15000)
+    # points, lms, wc = make_default_example(6000, 0.07, 0, resample=10000)
+    points, lms, wc = make_default_example(5000, 0.07, 0, resample=7000)
+    # points, lms, wc = make_ring_example(5000, 0.12, 0, resample=12000, noise=1.0)
     ac = dy.AlphaComplex(lms)
     ecwc = dy.EdgeCliqueWitnessComplex(lms, points, 2)
     # ecwc.barrens_patching(points, dim=2, level=1)
+    print("ECWC: ", ecwc.betti_numbers)
+    print("WC: ", wc.betti_numbers)
 
-    draw_directed_graph(lms, ecwc._vmatrix.uni_vmatrix, threshold=0, elabels=False)
+    draw_directed_graph(lms, ecwc._vmatrices[1].uni_vmatrix, threshold=0, elabels=False, title="1-dim edge graph")
+    draw_directed_graph(lms, ecwc._vmatrices[2].uni_vmatrix, threshold=0, elabels=False, title="2-dim edge graph")
+    # draw_directed_graph(lms, ecwc._vmatrices[3].uni_vmatrix, threshold=0, elabels=False, title="2-dim edge graph")
 
     wc_barrens = wc.barren_witnesses(points, 2)
     ecwc_barrens = ecwc.barren_witnesses(points, 2)
@@ -155,23 +180,23 @@ def barrens_cliques():
     argsort_dists = np.argsort(distances, axis=1)
     distances.sort(axis=1)
 
-    n0 = len(wc.simplices[0])
-    witness_matrix = np.zeros((n0, n0))
-    uni_witness_matrix = np.zeros((n0, n0))
-    points_matrix = np.zeros((n0, n0))
-    uni_points_matrix = np.zeros((n0, n0))
+    # n0 = len(wc.simplices[0])
+    # witness_matrix = np.zeros((n0, n0))
+    # uni_witness_matrix = np.zeros((n0, n0))
+    # points_matrix = np.zeros((n0, n0))
+    # uni_points_matrix = np.zeros((n0, n0))
 
-    kw = 3
-    # for i in wc._barren_witnesses[2]:
-    for i in ecwc.barren_witnesses(points, 2, indices=True):
-        bsimplex = argsort_dists[i, :(kw+1)]
-        for x in range(1, kw+1):
-            witness_matrix[bsimplex[0], bsimplex[x]] += 1
-    kp = 2
-    for i in range(len(points)):
-        bsimplex = argsort_dists[i, :(kp+1)]
-        for x in range(1, kp+1):
-            points_matrix[bsimplex[0], bsimplex[x]] += 1
+    # kw = 3
+    # # for i in wc._barren_witnesses[2]:
+    # for i in ecwc.barren_witnesses(points, 2, indices=True):
+    #     bsimplex = argsort_dists[i, :(kw+1)]
+    #     for x in range(1, kw+1):
+    #         witness_matrix[bsimplex[0], bsimplex[x]] += 1
+    # kp = 2
+    # for i in range(len(points)):
+    #     bsimplex = argsort_dists[i, :(kp+1)]
+    #     for x in range(1, kp+1):
+    #         points_matrix[bsimplex[0], bsimplex[x]] += 1
 
     # nonzeros = []
     # for i in range(n0):
@@ -199,17 +224,20 @@ def barrens_cliques():
     #         print(clique)
 
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, 8))
-    draw_witnesses(lms, wc_barrens, wc, vlabels=True, title='witness', fig=fig, ax=ax1)
+    draw_witnesses(lms, wc_barrens, wc, vlabels=False, title='witness', fig=fig, ax=ax1)
     draw_witnesses(lms, points, ac, vlabels=True, title='alpha', fig=fig, ax=ax2)
-    draw_witnesses(lms, ecwc_barrens, ecwc, vlabels=True, title='clique witness', fig=fig, ax=ax3)
+    draw_witnesses(lms, ecwc_barrens, ecwc, vlabels=False, title='clique witness', fig=fig, ax=ax3)
 
-    # fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 7.5))
-    # ecwc.barrens_patching(points, dim=2, level=3)
-    # draw_witnesses(lms, ecwc_barrens, ecwc, vlabels=False, title='patched clique witness', fig=fig, ax=ax1)
-    # ecwc2 = dy.EdgeCliqueWitnessComplex(lms, points, 2, max_cliques_dim=2)
-    # ecwc2.voted_barrens_patching(points, dim=2, level=5)
-    # # ecwc2.voted_barrens_patching(points, dim=2, level=3)
-    # draw_witnesses(lms, ecwc_barrens, ecwc2, vlabels=False, title='voted patched clique witness', fig=fig, ax=ax2)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 7.5))
+    ecwc.barrens_patching(points, dim=2, level=1)
+    draw_witnesses(lms, ecwc_barrens, ecwc, vlabels=False, title='patched clique witness', fig=fig, ax=ax1)
+    ecwc2 = dy.EdgeCliqueWitnessComplex(lms, points, 2, max_cliques_dim=2)
+    print("ECWC2: ", ecwc2.betti_numbers)
+    ecwc2.voted_barrens_patching(points, dim=2, level=4)
+    print("ECWCp: ", ecwc.betti_numbers)
+    print("ECWC2p: ", ecwc2.betti_numbers)
+    # ecwc2.voted_barrens_patching(points, dim=2, level=3)
+    draw_witnesses(lms, ecwc_barrens, ecwc2, vlabels=False, title='voted patched clique witness', fig=fig, ax=ax2)
     # dy.draw_barren_witnesses(ecwc, points=points, order=2)
 
     # draw_complex(wc, vlabels=True)
@@ -217,23 +245,42 @@ def barrens_cliques():
 
     # draw_witnesses(lms, points, wc, barrens=2, vlabels=True)
 
-    areax = [0.42, 0.62]
-    areay = [0.27, 0.47]
-    # areax = [0.32, 0.52]
-    # areay = [0.25, 0.45]
-    res = 512
-    # fig, ax = dy.draw_directed_voronoi_cells_2d(lms, order=2, complex=None, resolution=res,
-    #                                             areax=areax, areay=areay)
-    # draw_witnesses(lms, points=points, ax=ax, fig=fig)
-    # # dy.draw_barren_witnesses(wc, points=points, ax=ax, fig=fig, order=2)
-    # fig, ax = dy.draw_voronoi_cells_2d(lms, order=2, complex=None, resolution=res,
-    #                                    areax=areax, areay=areay)
-    # dy.draw_barren_witnesses(wc, points=points, ax=ax, fig=fig, order=2)
-    # fig, ax = dy.draw_directed_voronoi_cells_2d(lms, order=3, complex=None, resolution=res,
-    #                                             areax=areax, areay=areay)
-    # draw_witnesses(lms, points=points, ax=ax, fig=fig)
+    # areax = [0.64, 0.67]
+    # areay = [0.07, 0.1]
+    areax = [0.35, 0.5]
+    areay = [0.25, 0.40]
+    # areax = [0., 0.2]
+    # areay = [0.18, 0.38]
 
-    # dy.draw_barren_witnesses(wc, points=points, ax=ax, fig=fig, order=2)
+    # areax = [0.25, 0.45]
+    # areay = [0.72, 0.92]
+    # areax = [0.42, 0.62]
+    # areay = [0.27, 0.47]
+    # areax = [0.32, 0.52]
+    # areay = [0.2, 0.4]
+    res = 512
+    fig, ax = dy.draw_directed_voronoi_cells_2d(lms, order=1, complex=None, resolution=res,
+                                                areax=areax, areay=areay)
+    draw_witnesses(lms, points=points, ax=ax, fig=fig)
+    # # dy.draw_barren_witnesses(wc, points=points, ax=ax, fig=fig, order=2)
+    fig, ax = dy.draw_voronoi_cells_2d(lms, order=2, complex=None, resolution=res,
+                                       areax=areax, areay=areay)
+    dy.draw_barren_witnesses(wc, points=points, ax=ax, fig=fig, order=2)
+
+    fig, ax = dy.draw_voronoi_cells_2d(lms, order=3, complex=None, resolution=res,
+                                       areax=areax, areay=areay)
+    dy.draw_barren_witnesses(wc, points=points, ax=ax, fig=fig, order=2)
+
+    fig, ax = dy.draw_directed_voronoi_cells_2d(lms, order=2, complex=None, resolution=res,
+                                                areax=areax, areay=areay)
+    dy.draw_barren_witnesses(wc, points=points, ax=ax, fig=fig, order=2)
+
+    fig, ax = dy.draw_directed_voronoi_cells_2d(lms, order=3, complex=None, resolution=res,
+                                                areax=areax, areay=areay)
+    dy.draw_barren_witnesses(wc, points=points, ax=ax, fig=fig, order=2)
+    # draw_witnesses(lms, points=points, ax=ax, fig=fig)
+    # dy.draw_barren_witnesses(wc, points=points, ax=ax, fig=fig, order=3)
+
     # fig, ax = dy.draw_voronoi_cells_2d(lms, order=3, complex=None, resolution=res,
     #                                    areax=areax, areay=areay)
     # dy.draw_barren_witnesses(wc, points=points, ax=ax, fig=fig, order=2)
@@ -242,12 +289,10 @@ def barrens_cliques():
     # draw_directed_graph(lms, witness_matrix, threshold=0, elabels=True)
     # draw_directed_graph(lms, uni_witness_matrix, threshold=0, elabels=True)
 
-    # print(ecwc.betti_numbers)
-    # print(ecwc2.betti_numbers)
     # print(wc.betti_numbers)
     plt.show()
 
 
-barrens_cliques()
-# edge_clique_witness_example()
 
+# barrens_cliques()
+edge_clique_witness_example()
