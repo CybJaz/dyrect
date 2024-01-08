@@ -165,6 +165,88 @@ def edge_clique_witness_example():
 
     plt.show()
 
+def witness_fail_statistics_sample_size_statistics():
+
+    wc_missing_triangles_ratio = dict()
+    pwc_missing_triangles_ratio = dict()
+    pwc_extra_triangles_ratio = dict()
+    ac_triangles_count = dict()
+
+    # 1st betti numbers
+    wc_bn = dict()
+    pwc_bn = dict()
+
+    # parameter types
+    parameter_types = ['sample_size', 'epsilon']
+    parameter_type = 0
+
+    if parameter_type == 0:
+        parameter_name = "sample size"
+        parameter_values = [5000, 7500, 10000, 15000, 20000, 25000, 30000, 40000, 50000]
+    elif parameter_type == 1:
+        parameter_name = "epsilon"
+        parameter_values = [0.05, 0.075, 0.1, 0.15, 0.2]
+
+    for pv in parameter_values:
+        wc_missing_triangles_ratio[pv] = []
+        pwc_missing_triangles_ratio[pv] = []
+        pwc_extra_triangles_ratio[pv] = []
+        ac_triangles_count[pv] = []
+
+        wc_bn[pv] = []
+        pwc_bn[pv] = []
+
+        for seed in range(15):
+            if parameter_type == 0:
+                points, lms, wc = make_default_example(2000, 0.1, seed, resample=pv)
+            elif parameter_type == 1:
+                points, lms, wc = make_default_example(5000, pv, seed, resample=10000)
+            ac = dy.AlphaComplex(lms)
+            pwc = dy.EdgeCliqueWitnessComplex(lms, points, 2)
+
+            wc_bn[pv].append(wc.betti_numbers[1])
+            pwc_bn[pv].append(pwc.betti_numbers[1])
+
+            ac_triangles = set(ac.simplices[2])
+            wc_triangles = set(wc.simplices[2])
+            pwc_triangles = set(pwc.simplices[2])
+
+            wc_missing_triangles = ac_triangles.difference(wc_triangles)
+            pwc_missing_triangles = ac_triangles.difference(pwc_triangles)
+            pwc_extra_triangles = pwc_triangles.difference(ac_triangles)
+
+            wc_missing_triangles_ratio[pv].append(len(wc_missing_triangles)/len(ac_triangles))
+            pwc_missing_triangles_ratio[pv].append(len(pwc_missing_triangles)/len(ac_triangles))
+            pwc_extra_triangles_ratio[pv].append(len(pwc_extra_triangles)/len(ac_triangles))
+            ac_triangles_count[pv].append(len(ac_triangles))
+
+    avg_wc_missing = [np.mean(wc_missing_triangles_ratio[ss]) for ss in parameter_values]
+    avg_pwc_missing = [np.mean(pwc_missing_triangles_ratio[ss]) for ss in parameter_values]
+    avg_pwc_extra = [np.mean(pwc_extra_triangles_ratio[ss]) for ss in parameter_values]
+    std_wc_missing = [np.std(wc_missing_triangles_ratio[ss]) for ss in parameter_values]
+    std_pwc_missing = [np.std(pwc_missing_triangles_ratio[ss]) for ss in parameter_values]
+    std_pwc_extra = [np.std(pwc_extra_triangles_ratio[ss]) for ss in parameter_values]
+
+    plt.figure()
+    plt.errorbar(parameter_values, avg_wc_missing, std_wc_missing, label="wc missing triangles ratio")
+    plt.errorbar(parameter_values, avg_pwc_missing, std_pwc_missing, label="pwc missing triangles ratio")
+    plt.errorbar(parameter_values, avg_pwc_extra, std_pwc_extra, label="pwc extra triangles ratio")
+    plt.legend()
+    plt.xlabel(parameter_name)
+
+    avg_wc_bn = [np.mean(wc_bn[s]) for s in parameter_values]
+    std_wc_bn = [np.std(wc_bn[s]) for s in parameter_values]
+    avg_pwc_bn = [np.mean(pwc_bn[s]) for s in parameter_values]
+    std_pwc_bn = [np.std(pwc_bn[s]) for s in parameter_values]
+
+    plt.figure()
+    plt.errorbar(parameter_values, avg_wc_bn, std_wc_bn, label="wc 1-betti number")
+    plt.errorbar(parameter_values, avg_pwc_bn, std_pwc_bn, label="pwc 1-betti number")
+    plt.legend()
+    plt.xlabel(parameter_name)
+
+    plt.show()
+
 def barren_lands():
     points, lms, wc = make_default_example(2000, 0.1, 0, resample=8000)
     ac = dy.AlphaComplex(lms)
@@ -219,6 +301,8 @@ def witness_complex_patching_example():
 
 
 # edge_clique_witness_example()
-witness_complex_patching_example()
+# witness_complex_patching_example()
 
 # barren_lands()
+
+witness_fail_statistics_sample_size_statistics()
