@@ -67,7 +67,7 @@ def clique_complex_experiment():
     level = 4
     for i in range(1):
         print(i, " patching")
-        ecwc.barrens_patching(points, 2, level=level)
+        ecwc.barrens_patching(points, 2, b_param=level)
         # ecwc.voted_barrens_patching(points, 2, level=level)
         print("ECWCp: ", ecwc.betti_numbers)
 

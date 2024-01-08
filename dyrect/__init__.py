@@ -10,6 +10,6 @@ from .poset import Poset
 
 from .witness_complex import WitnessComplex, VWitnessComplex, PatchedWitnessComplex, EdgeCliqueWitnessComplex
 from .cgal_utils import all_triangles_intersection_test_2D, all_triangles_intersection_test_3D, is_convex_hull, \
-    Delaunay2d_complex, Delaunay3d_complex, draw_voronoi_cells_2d, draw_directed_voronoi_cells_2d
+    Delaunay2d_complex, Delaunay3d_complex, draw_voronoi_cells_2d, draw_directed_voronoi_cells_2d, draw_barren_lands
 
 from .utils import save_as_plyfile, load_plyfile, Timer

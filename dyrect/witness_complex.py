@@ -142,12 +142,12 @@ class WitnessComplex(Complex):
                     # if distances[i, argsort_dists[i, d]] <= self._eps:
                     simplex = tuple(np.sort(argsort_dists[i, :d + 1]))
                     if simplex not in self._simplices[d]:
-                        well_witnessed = True
+                        fully_witnessed = True
                         for face in combinations(simplex, d):
                             if face not in self._simplices[d - 1]:
-                                well_witnessed = False
+                                fully_witnessed = False
                                 break
-                        if well_witnessed:
+                        if fully_witnessed:
                             self._simplices[d].append(simplex)
                             self._st.insert(list(simplex))
                         else:
@@ -159,6 +159,29 @@ class WitnessComplex(Complex):
         self._st.compute_persistence(persistence_dim_max=True)
         print("betti computed")
         self._betti_numbers = self._st.betti_numbers()
+
+
+    @classmethod
+    def make_a_copy(cls, wc):
+        obj = cls.__new__(cls)
+        obj._st = SimplexTree()
+        obj._simplices = dict()
+
+        obj._alpha = wc._alpha
+        obj._beta_square = wc._beta_square
+        obj._dim = wc._dim
+
+        obj._coordinates = wc._coordinates.copy()
+        obj._ambient_dim = wc._ambient_dim
+
+        for d in wc._simplices:
+            obj._simplices[d] = wc._simplices[d].copy()
+            for simplex in obj._simplices[d]:
+                obj._st.insert(list(simplex))
+        obj._betti_numbers = None
+
+        return obj
+
 
     @classmethod
     def construct(cls, st, simpls, coords, dim):
@@ -175,7 +198,12 @@ class WitnessComplex(Complex):
         obj._betti_numbers = None
         return obj
 
-    def _argsort_distances(self, points):
+    def _argsort_distances(self, points, cut=-1):
+        """
+        Construct a sorted array consisting of sequences of the closest landmarks for every points.
+        @param points:
+        @return:
+        """
         skip = 50000
         argsort_dists = np.zeros((len(points), len(self._coordinates.values())), dtype=np.int32)
         for p in np.arange(0, len(points), skip):
@@ -183,11 +211,12 @@ class WitnessComplex(Complex):
             argsort_dists_slice = np.argsort(distances, axis=1)
             argsort_dists[p:(p+skip), :] = argsort_dists_slice
 
-        # distances = cdist(points, np.array(list(self._coordinates.values())), 'euclidean')
-        # argsort_dists = np.argsort(distances, axis=1)
-        return argsort_dists
+        if cut < 1:
+            return argsort_dists
+        else:
+            return argsort_dists[:, :cut]
 
-    def barren_witnesses(self, points, dim, indices=False):
+    def get_barren_witnesses(self, points, dim, indices=False):
         barrens = []
         ibarrens = []
         argsort_dists = self._argsort_distances(points)
@@ -202,6 +231,48 @@ class WitnessComplex(Complex):
         else:
             return np.array(barrens)
 
+    def get_edge_witness_graph(self, points, b_param):
+        argsort_dists = self._argsort_distances(points)
+
+        vmatrix = VMatrix(len(self._coordinates))
+        for iw in range(len(points)):
+            dsim = argsort_dists[iw, :b_param]
+            vmatrix.add_directed_simplex(dsim)
+        # g = nx.from_numpy_matrix(vmatrix.uni_vmatrix)
+        return vmatrix
+
+    def barrens_patching(self, points, d_param, b_param=1):
+        """
+
+        @param points:
+        @param d_param: dimension of the barren witnesses used for the patching
+        @param b_param:
+        """
+        barren_witnesses = self.get_barren_witnesses(points, d_param)
+        vmatrix = self.get_edge_witness_graph(barren_witnesses, b_param)
+
+        g = nx.from_numpy_matrix(vmatrix.uni_vmatrix)
+        for clique in nx.find_cliques(g):
+            ds = len(clique) - 1
+            clique.sort()
+            if ds not in self._simplices:
+                nd = ds
+                while nd not in self._simplices:
+                    self._simplices[nd] = []
+                    nd -= 1
+            # if ds >= d_param:
+                # print(clique)
+                # if ds <= self._dim:
+                #     self._simplices[ds].append(tuple(clique))
+            for fd in range(1, ds+1):
+                for face in itertools.combinations(clique, fd+1):
+                    fsim = tuple(face)
+                    if fsim not in self._simplices[fd]:
+                        self._simplices[fd].append(fsim)
+        self._st = None
+        self._betti_numbers = None
+
+        return vmatrix
 
 class EdgeCliqueWitnessComplex(WitnessComplex):
     def __init__(self, landmarks, witnesses, witnesses_dim, max_cliques_dim=100, max_complex_dimension=-1):
@@ -266,37 +337,37 @@ class EdgeCliqueWitnessComplex(WitnessComplex):
                                 self._st.insert(list(fsim))
                 # elif ds > self._dim:
 
-    def barrens_patching(self, points, dim, level=1, over=0):
-        barren_witnesses = self.barren_witnesses(points, dim)
-        argsort_dists = self._argsort_distances(barren_witnesses)
-
-        self._vmatrix = VMatrix(len(self._coordinates))
-        for iw in range(len(barren_witnesses)):
-            dsim = argsort_dists[iw, :(self._dim+1+level)]
-            self._vmatrix.add_directed_simplex(dsim)
-        g = nx.from_numpy_matrix(self._vmatrix.uni_vmatrix)
-        for clique in nx.find_cliques(g):
-            ds = len(clique) - 1
-            clique.sort()
-            if ds not in self._simplices:
-                nd = ds
-                while nd not in self._simplices:
-                    self._simplices[nd] = []
-                    nd -= 1
-            if ds >= dim:
-                # print(clique)
-                # if ds <= self._dim:
-                #     self._simplices[ds].append(tuple(clique))
-                for fd in range(1, ds+1):
-                    for face in itertools.combinations(clique, fd+1):
-                        fsim = tuple(face)
-                        if fsim not in self._simplices[fd]:
-                            self._simplices[fd].append(fsim)
-        self._st = None
-        self._betti_numbers = None
+    # def barrens_patching(self, points, dim, level=1, over=0):
+    #     get_barren_witnesses = self.get_barren_witnesses(points, dim)
+    #     argsort_dists = self._argsort_distances(get_barren_witnesses)
+    #
+    #     self._vmatrix = VMatrix(len(self._coordinates))
+    #     for iw in range(len(get_barren_witnesses)):
+    #         dsim = argsort_dists[iw, :(self._dim+1+level)]
+    #         self._vmatrix.add_directed_simplex(dsim)
+    #     g = nx.from_numpy_matrix(self._vmatrix.uni_vmatrix)
+    #     for clique in nx.find_cliques(g):
+    #         ds = len(clique) - 1
+    #         clique.sort()
+    #         if ds not in self._simplices:
+    #             nd = ds
+    #             while nd not in self._simplices:
+    #                 self._simplices[nd] = []
+    #                 nd -= 1
+    #         if ds >= dim:
+    #             # print(clique)
+    #             # if ds <= self._dim:
+    #             #     self._simplices[ds].append(tuple(clique))
+    #             for fd in range(1, ds+1):
+    #                 for face in itertools.combinations(clique, fd+1):
+    #                     fsim = tuple(face)
+    #                     if fsim not in self._simplices[fd]:
+    #                         self._simplices[fd].append(fsim)
+    #     self._st = None
+    #     self._betti_numbers = None
 
     def voted_barrens_patching(self, points, dim, level=1, over=0):
-        barren_witnesses = self.barren_witnesses(points, dim)
+        barren_witnesses = self.get_barren_witnesses(points, dim)
         argsort_dists = self._argsort_distances(barren_witnesses)
 
         self._vmatrix = VMatrix(len(self._coordinates))
@@ -366,7 +437,7 @@ def is_simple_cycle(complex, dim):
 class VMatrix():
     def __init__(self, n):
         self._n = n
-        i16 = np.iinfo(np.int16)
+        # i16 = np.iinfo(np.int16)
         # self._vmatrix = np.diag([i16.max for _ in range(self._n)])
         self._vmatrix = np.zeros((self._n, self._n))
 
@@ -382,6 +453,10 @@ class VMatrix():
 
     def at(self, x, y):
         return self._vmatrix[x, y]
+
+    @property
+    def matrix(self):
+        return self._vmatrix
 
     @property
     def uni_vmatrix(self):

@@ -318,12 +318,35 @@ def draw_voronoi_cells_2d(lms, order=1, areax=[0, 1], areay=[0,1], resolution=10
         draw_complex(complex, fig=fig, ax=ax, alpha=0.2)
     return fig, ax
 
-def draw_directed_voronoi_cells_2d(lms, order=2, areax=[0, 1], areay=[0,1], resolution=10,
-                          complex=None, labels=True, fig=None, ax=None):
+def draw_directed_voronoi_cells_2d(lms, order=2, voi=[], scale=1.05, resolution=50,
+                                   soi=[],
+                                   complex=None, labels=True, fig=None, ax=None):
+    """
+
+    @param lms:
+    @param order:
+    @param voi: Vertices of interest.
+    @param soi: Simplices of interest.
+    @param scale: Scale of the area bounded by VOI
+    @param resolution:
+    @param complex:
+    @param labels:
+    @param fig:
+    @param ax:
+    @return:
+    """
     fwidth = 10
-    # fig = plt.figure(figsize=(fwidth, fwidth*0.4))
-    # rows = 1
-    # cols = 2
+    if (fig is None) or (ax is None):
+        fig = plt.figure(figsize=(fwidth, fwidth))
+        ax = plt.subplot()
+
+    [xmax, xmin] = [np.max([lms[i, 0] for i in voi]), np.min([lms[i, 0] for i in voi])]
+    [ymax, ymin] = [np.max([lms[i, 1] for i in voi]), np.min([lms[i, 1] for i in voi])]
+    [xrad, yrad] = [(xmax - xmin)/2., (ymax - ymin)/2.]
+    [xmean, ymean] = [(xmax + xmin)/2., (ymax + ymin)/2.]
+
+    areax = [xmean - xrad * scale, xmean + xrad * scale]
+    areay = [ymean - yrad * scale, ymean + yrad * scale]
 
     xpoints = np.linspace(areax[0], areax[1], resolution+1)
     ypoints = np.linspace(areay[0], areay[1], resolution+1)
@@ -331,29 +354,24 @@ def draw_directed_voronoi_cells_2d(lms, order=2, areax=[0, 1], areay=[0,1], reso
 
     xy = np.vstack((X.flatten(), Y.flatten())).T
     grid_dists = cdist(xy, lms, 'euclidean')
-    # points_dists = cdist(points, lms, 'euclidean')
-    def get_points_of_interest(verts, dim):
-        sim_wareas = dict()
-        sim_witnesses = dict()
-        for sim in permutations(verts, dim):
-            sim_wareas[tuple(sim)] = []
-            sim_witnesses[tuple(sim)] = []
-        for x_arg_sorted, x in zip(np.argsort(grid_dists, axis=1), range(len(xy))):
-            wit_sim = tuple(x_arg_sorted[:dim])
-            if wit_sim in sim_wareas:
-                sim_wareas[wit_sim].append(x)
-            else:
-                print("what?")
-        # for x_arg_sorted, x in zip(np.argsort(points_dists, axis=1), range(len(points))):
-        #     wit_sim = tuple(np.sort(x_arg_sorted[:dim + 1]))
-        #     if wit_sim in sim_witnesses:
-        #         sim_witnesses[wit_sim].append(x)
-        return sim_wareas, sim_witnesses
 
-    if (fig is None) or (ax is None):
-        fig = plt.figure(figsize=(fwidth, fwidth))
-        ax = plt.subplot()
-    sim_wareas, sim_witnesses = get_points_of_interest(range(len(lms)), order)
+    # dictionary of points corresponding to each directed voronoi cell
+    sim_wareas = dict()
+
+    # permutations of interest
+    poi = set()
+    for esim in soi:
+        for perm in permutations(np.sort(esim), order):
+            poi.add(tuple(perm))
+
+    for sim in permutations(voi, order):
+        if sim in poi:
+            sim_wareas[tuple(sim)] = []
+
+    for x_arg_sorted, x in zip(np.argsort(grid_dists, axis=1), range(len(xy))):
+        wit_sim = tuple(x_arg_sorted[:order])
+        if wit_sim in sim_wareas:
+            sim_wareas[wit_sim].append(x)
 
     empty_keys = [key for key in sim_wareas.keys() if len(sim_wareas[key]) == 0]
     for key in empty_keys:
@@ -361,24 +379,29 @@ def draw_directed_voronoi_cells_2d(lms, order=2, areax=[0, 1], areay=[0,1], reso
     if complex is not None:
         not_in_complex = [key for key in sim_wareas.keys() if key not in complex.simplices[order-1]]
 
+
     cm = plt.cm.get_cmap('nipy_spectral')(np.linspace(0.05, 1, len(sim_wareas), endpoint=False))
     np.random.seed(0)
     np.random.shuffle(cm)
-    # print([(s, len(sim_witnesses[s])) for s in sim_witnesses])
+
+    ### Drawing all pixels of the region:
+    # for isim, sim in enumerate(sim_wareas):
+    #     points_list = sim_wareas[sim]
+    #     if len(points_list) > 0:
+    #         e_xy = np.array([xy[i, :] for i in points_list])
+    #         area_color = cm[isim]
+    #         ax.scatter(e_xy[:, 0], e_xy[:, 1], s=.05, label=sim, color=area_color)
+
+    ### Drawing a convex hull of the detected region:
     for isim, sim in enumerate(sim_wareas):
         points_list = sim_wareas[sim]
-        if len(points_list) > 0:
-            e_xy = np.array([xy[i, :] for i in points_list])
-            # if complex is not None and sim in not_in_complex:
-            #     area_color = 'k'
-            #     ax.scatter(e_xy[:, 0], e_xy[:, 1], s=.05, color=area_color)
-            # else:
-            #     area_color = cm[isim]
-            #     ax.scatter(e_xy[:, 0], e_xy[:, 1], s=.05, label=sim, color=area_color)
-            area_color = cm[isim]
-            ax.scatter(e_xy[:, 0], e_xy[:, 1], s=.05, label=sim, color=area_color)
+        cgal_points = [Point_2(*xy[p]) for p in points_list]
+        convex_hull = []
+        CGAL_Convex_hull_2.convex_hull_2(cgal_points, convex_hull)
+        hull_points = np.array([[p.x(), p.y()] for p in convex_hull])
+        ax.fill(hull_points[:, 0], hull_points[:, 1], label=sim, color=cm[isim], alpha=0.5)
+
     ax.scatter(lms[:, 0], lms[:, 1], color='k', s=10.5)
-    # ax.scatter(points[:, 0], points[:, 1], color='k', s=0.5)
     ax.set_aspect('equal')
     if labels:
         for v in range(len(lms)):
@@ -392,3 +415,165 @@ def draw_directed_voronoi_cells_2d(lms, order=2, areax=[0, 1], areay=[0,1], reso
     if complex is not None:
         draw_complex(complex, fig=fig, ax=ax, alpha=0.2)
     return fig, ax
+
+
+def draw_barren_lands(wc, ac, witnesses=None, labels=True, fig=None, ax=None):
+
+    ### TODO: adapt picture to the position of landmarks
+    fwidth = 10
+    if (fig is None) or (ax is None):
+        fig = plt.figure(figsize=(fwidth, fwidth))
+        ax = plt.subplot()
+
+    resolution = 2**12
+    order = 3
+    xpoints = np.linspace(0, 1, resolution+1)
+    ypoints = np.linspace(0, 1, resolution+1)
+    X, Y = np.meshgrid(xpoints, ypoints)
+    xy = np.vstack((X.flatten(), Y.flatten())).T
+    # grid_dists = wc._argsort_distances(xy, cut=3)
+
+    lms = wc.coordinates
+    lms = np.array([x for x in lms.values()])
+    grid_dists = cdist(xy, lms, 'euclidean')
+
+    witnessed = dict()
+    incidentally_barren = dict()
+    intrinsically_barren = dict()
+    for sim in ac.simplices[order-1]:
+    # for sim in permutations(range(len(lms)), 3):
+        if sim in wc.simplices[order-1]:
+            witnessed[tuple(sim)] = []
+        else:
+            incidentally_barren[tuple(sim)] = []
+
+    for x_arg_sorted, x in zip(np.argsort(grid_dists, axis=1), range(len(xy))):
+        wit_sim = tuple(sorted(x_arg_sorted[:order]))
+        if wit_sim in witnessed:
+            witnessed[wit_sim].append(x)
+        elif wit_sim in incidentally_barren:
+            incidentally_barren[wit_sim].append(x)
+        else:
+            if wit_sim not in intrinsically_barren:
+                intrinsically_barren[wit_sim] = []
+            intrinsically_barren[wit_sim].append(x)
+
+    cm = plt.cm.get_cmap('gist_rainbow')(np.linspace(0.05, 1, len(witnessed), endpoint=False))
+
+    # ax.fill([0, 0, 1, 1], [0, 1, 1, 0], 'k')
+    for isim, sim in enumerate(witnessed):
+        points_list = witnessed[sim]
+        if len(points_list) > 0:
+            cgal_points = [Point_2(*xy[p]) for p in points_list]
+            convex_hull = []
+            CGAL_Convex_hull_2.convex_hull_2(cgal_points, convex_hull)
+            hull_points = np.array([[p.x(), p.y()] for p in convex_hull])
+            ax.fill(hull_points[:, 0], hull_points[:, 1], color=cm[isim], alpha=0.25)
+
+    for isim, sim in enumerate(incidentally_barren):
+        points_list = incidentally_barren[sim]
+        if len(points_list) > 0:
+            cgal_points = [Point_2(*xy[p]) for p in points_list]
+            convex_hull = []
+            CGAL_Convex_hull_2.convex_hull_2(cgal_points, convex_hull)
+            hull_points = np.array([[p.x(), p.y()] for p in convex_hull])
+            ax.fill(hull_points[:, 0], hull_points[:, 1], color='gray', alpha=0.8)
+
+    for isim, sim in enumerate(intrinsically_barren):
+        points_list = intrinsically_barren[sim]
+        if len(points_list) > 0:
+            cgal_points = [Point_2(*xy[p]) for p in points_list]
+            convex_hull = []
+            CGAL_Convex_hull_2.convex_hull_2(cgal_points, convex_hull)
+            hull_points = np.array([[p.x(), p.y()] for p in convex_hull])
+            ax.fill(hull_points[:, 0], hull_points[:, 1], color='k', alpha=0.75)
+
+
+    ax.scatter(lms[:, 0], lms[:, 1], color='k', s=10.5)
+    if witnesses is not None:
+        ax.scatter(witnesses[:, 0], witnesses[:, 1], color='k', alpha=0.2, s=1)
+    ax.set_aspect('equal')
+
+    if labels:
+        for v in range(len(lms)):
+            ax.annotate(str(v), (lms[v, 0], lms[v, 1]), fontsize=15, bbox=dict(boxstyle="round4", fc="w"))
+            # legend = ax.legend(loc='right', bbox_to_anchor=(1.15, 0.5))
+        # for i in range(len(legend.legendHandles)):
+            # legend.legendHandles[i]._sizes = [30]
+
+    return fig, ax
+
+# def draw_directed_voronoi_cells_2d(lms, order=2, areax=[0, 1], areay=[0,1], resolution=10,
+#                           complex=None, labels=True, fig=None, ax=None):
+#     fwidth = 10
+#     # fig = plt.figure(figsize=(fwidth, fwidth*0.4))
+#     # rows = 1
+#     # cols = 2
+#
+#     xpoints = np.linspace(areax[0], areax[1], resolution+1)
+#     ypoints = np.linspace(areay[0], areay[1], resolution+1)
+#     X, Y = np.meshgrid(xpoints, ypoints)
+#
+#     xy = np.vstack((X.flatten(), Y.flatten())).T
+#     grid_dists = cdist(xy, lms, 'euclidean')
+#     # points_dists = cdist(points, lms, 'euclidean')
+#     def get_points_of_interest(verts, dim):
+#         sim_wareas = dict()
+#         sim_witnesses = dict()
+#         for sim in permutations(verts, dim):
+#             sim_wareas[tuple(sim)] = []
+#             sim_witnesses[tuple(sim)] = []
+#         for x_arg_sorted, x in zip(np.argsort(grid_dists, axis=1), range(len(xy))):
+#             wit_sim = tuple(x_arg_sorted[:dim])
+#             if wit_sim in sim_wareas:
+#                 sim_wareas[wit_sim].append(x)
+#             else:
+#                 print("what?")
+#         # for x_arg_sorted, x in zip(np.argsort(points_dists, axis=1), range(len(points))):
+#         #     wit_sim = tuple(np.sort(x_arg_sorted[:dim + 1]))
+#         #     if wit_sim in sim_witnesses:
+#         #         sim_witnesses[wit_sim].append(x)
+#         return sim_wareas, sim_witnesses
+#
+#     if (fig is None) or (ax is None):
+#         fig = plt.figure(figsize=(fwidth, fwidth))
+#         ax = plt.subplot()
+#     sim_wareas, sim_witnesses = get_points_of_interest(range(len(lms)), order)
+#
+#     empty_keys = [key for key in sim_wareas.keys() if len(sim_wareas[key]) == 0]
+#     for key in empty_keys:
+#         sim_wareas.pop(key)
+#     if complex is not None:
+#         not_in_complex = [key for key in sim_wareas.keys() if key not in complex.simplices[order-1]]
+#
+#     cm = plt.cm.get_cmap('nipy_spectral')(np.linspace(0.05, 1, len(sim_wareas), endpoint=False))
+#     np.random.seed(0)
+#     np.random.shuffle(cm)
+#     # print([(s, len(sim_witnesses[s])) for s in sim_witnesses])
+#     for isim, sim in enumerate(sim_wareas):
+#         points_list = sim_wareas[sim]
+#         if len(points_list) > 0:
+#             e_xy = np.array([xy[i, :] for i in points_list])
+#             # if complex is not None and sim in not_in_complex:
+#             #     area_color = 'k'
+#             #     ax.scatter(e_xy[:, 0], e_xy[:, 1], s=.05, color=area_color)
+#             # else:
+#             #     area_color = cm[isim]
+#             #     ax.scatter(e_xy[:, 0], e_xy[:, 1], s=.05, label=sim, color=area_color)
+#             area_color = cm[isim]
+#             ax.scatter(e_xy[:, 0], e_xy[:, 1], s=.05, label=sim, color=area_color)
+#     ax.scatter(lms[:, 0], lms[:, 1], color='k', s=10.5)
+#     # ax.scatter(points[:, 0], points[:, 1], color='k', s=0.5)
+#     ax.set_aspect('equal')
+#     if labels:
+#         for v in range(len(lms)):
+#             ax.annotate(str(v), (lms[v, 0], lms[v, 1]), fontsize=15, bbox=dict(boxstyle="round4", fc="w"))
+#             legend = ax.legend(loc='right', bbox_to_anchor=(1.15, 0.5))
+#         for i in range(len(legend.legendHandles)):
+#             legend.legendHandles[i]._sizes = [30]
+#     plt.title("Directed " + str(order) + "-Voronoi cells")
+#     plt.xlim(areax)
+#     plt.ylim(areay)
+#     if complex is not None:
+#         draw_complex(complex, fig=fig, ax=ax, alpha=0.2)
+#     return fig, ax
